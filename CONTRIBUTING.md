@@ -1,9 +1,11 @@
-# Contributing
+# 參與開發
 
-Start at [docs/index.md](docs/index.md), then read the contract and tests for the component you change. Use Python 3.12+, fictional fixtures and temporary state. Keep docs in Markdown and diagrams in Mermaid; update the navigation links with each new page. English and Traditional Chinese READMEs must describe the same behavior.
+> **English summary:** Use pull requests, fictional fixtures, and targeted failure/recovery tests. Preserve runtime state and document changes in Traditional Chinese with an English summary, keeping both READMEs aligned.
 
-Run [the verification commands](docs/testing.md). Changes to grants, audience, delivery, receipts or canonical saves need failure/recovery tests, not only a happy-path screenshot. Do not add personal anecdotes to prompts or make a quota a mandatory number of replies.
+從 [文件索引](docs/index.md) 開始，再讀要修改元件的契約與測試。使用 Python 3.12+、虛構測試資料及暫存狀態。文件用 Markdown，圖表用 Mermaid；新增頁面時一併更新導覽連結。技術文件正文使用正體中文（臺灣用語），開頭附簡短英文摘要。獨立英文 README 保持英文，並與正體中文 README 描述相同行為；指令、程式碼、API／schema 識別字及授權原文不翻譯。
 
-Use a topic branch and pull request. Describe the resulting behavior, validation and remaining limits. Do not rewrite shared history to remove ordinary attribution. Never commit runtime files or credentials; follow [SECURITY.md](SECURITY.md) for suspected exposure.
+執行 [驗證指令](docs/testing.md)。修改授權、受眾、送達、回執或正式人格存檔時，需要失敗／復原測試，不能只提供成功畫面。不要把個人軼事加進 prompt，也不要把額度上限當成必須回滿的句數。
 
-The stable boundary in this preview is documented behavior, not every internal Python signature. Propose compatibility-affecting changes before silently migrating existing state. Preserve ledgers and unrelated dirty files; don't fix an upgrade by resetting a user's state.
+使用工作分支與 pull request，描述修改後的行為、驗證及剩餘限制。不要為了移除一般作者署名而重寫共用歷史。Runtime 檔案和憑證不得提交；疑似外洩依 [安全問題回報](SECURITY.md) 處理。
+
+本預覽版的穩定邊界是文件記載的行為，不保證每個內部 Python 函式簽章都不變。影響相容性的變更應先提出討論，不要默默遷移既有狀態。保留帳本與無關的 dirty 檔案，不能靠重設使用者狀態來修升級問題。

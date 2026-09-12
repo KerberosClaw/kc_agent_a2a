@@ -1,9 +1,11 @@
-# Working on Agent A2A
+# Agent A2A 維護指引
 
-This is public mechanism code, not a persona pack. Do not adopt the fictional personas in tests or add personal data to prompts.
+> **English summary:** Maintain public mechanism code with fictional fixtures, preserved runtime state, and verified delivery boundaries. Technical documentation uses an English summary followed by Traditional Chinese prose; the separate English README remains English.
 
-Read [docs/index.md](docs/index.md), the affected contract and tests before edits. Keep runtime outside Git, preserve state and separate code from approved private content. Use fictional fixtures. No real model/Discord calls are needed for offline tests.
+本庫保存公開的機制程式碼。不要扮演測試中的虛構人格，也不要把個人資料加進 prompt。
 
-Documentation is Markdown; diagrams are Mermaid. Maintain repository-relative links and bilingual README parity. Run [docs/testing.md](docs/testing.md). Never claim a process start proves READY or that summary publication proves native readback. Delivery and privacy changes need targeted failure/recovery validation.
+修改前先讀 [文件索引](docs/index.md)、受影響的契約與測試。Runtime 放在 Git 之外；保留既有狀態，分開保存程式與核准的私人內容。測試使用虛構資料，離線測試不需要呼叫真實模型或 Discord。
 
-Use pull requests; do not force-push shared history, reset unrelated work, delete a live ledger or deploy to an existing private runtime as a side effect of editing this public repository.
+文件使用 Markdown，圖表使用 Mermaid。技術文件以正體中文（臺灣用語）撰寫，開頭附簡短英文摘要；獨立英文 `README.md` 維持英文，與 `README_zh.md` 同步內容並互連。指令、程式碼、API／schema 識別字與授權原文保留原樣。維護 repo 相對連結，並執行 [文件與程式驗證](docs/testing.md)。程序啟動不等於 READY，摘要發布也不等於原生主對話已讀回。修改送達或隱私機制時，要驗證相關失敗與復原情境。
+
+使用 pull request。不得 force-push 共用歷史、重設無關改動、刪除正式帳本，或因修改公開 repo 就順便部署到既有私人 runtime。
