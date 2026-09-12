@@ -1,45 +1,47 @@
-# Architecture
+# 系統架構
 
-[Documentation index](index.md) · [Flows](flows.md) · [Data model](data-model.md)
+> **English summary:** A2A combines Python coordinators, native CLI workers, SQLite ledgers, Discord transport, and private encrypted archives. Separate stores and scoped persona views keep notes, night chat, and Party continuity distinct; native live execution targets macOS.
 
-The preview is a Python coordinator plus native CLI adapters, local SQLite ledgers, file-based approvals, Discord Gateway/REST transport, and an encrypted Git content archive. It has no HTTP server, hosted database, or platform-neutral service manager.
+[文件索引](index.md) · [流程](flows.md) · [資料模型](data-model.md)
+
+預覽版由 Python 協調程式、原生 CLI adapter、本機 SQLite 帳本、檔案式核准機制、Discord Gateway／REST 傳輸，以及加密的 Git 內容庫組成。沒有 HTTP server、代管資料庫或跨平台服務管理器。
 
 ```mermaid
 flowchart TB
-    H[Registered human] --> DC[Discord]
-    DC --> R[Connector and durable Party state]
-    R --> W[Isolated native room worker]
-    V[Approved persona view] --> W
-    W --> O[Validated outbox]
+    H[已註冊真人] --> DC[Discord]
+    DC --> R[Connector 與持久化 Party 狀態]
+    R --> W[隔離的房間原生 worker]
+    V[核准人格視圖] --> W
+    W --> O[已驗證 outbox]
     O --> DC
-    R --> A[Single archive writer]
-    A --> G[Private git-crypt content repo]
-    R --> C[Continuity worker]
-    C --> L[Sources and immutable summary batches]
-    L --> Hook[Scoped native readback hook]
-    Hook --> Main[Main persona session]
-    Main --> Save[Explicit canonical save]
-    Save --> P[Own baseline and all current patches]
-    P --> Cur[Private curator plus independent model audit]
+    R --> A[單一封存寫入器]
+    A --> G[私人 git-crypt 內容庫]
+    R --> C[經歷延續 worker]
+    C --> L[來源與不可變摘要批次]
+    L --> Hook[限定範圍的原生讀回 hook]
+    Hook --> Main[主人格 session]
+    Main --> Save[明確觸發的正式存檔]
+    Save --> P[自己的基線與所有現行 patches]
+    P --> Cur[私人整理器與獨立模型審查]
     G --> Cur
     Cur --> V
 ```
 
-The Party worker receives only its approved room persona, boundary, accepted room history, and optional approved materials. It does not receive a path to the canonical private persona. Private curation is a separate trusted operation with broader input access and no chat delivery or web tools.
+Party worker 只取得自己獲准使用的房間人格、邊界、已接受的房間歷史，以及選用且核准的素材；不會取得正式私人原人格的路徑。私人內容整理是另一個受信任的操作，能讀取較廣的輸入，但沒有群聊送訊或網頁工具。
 
-Notes and night chat live in `src/a2a/`. Notes use scoped native-turn capabilities and receipts. Night chat snapshots each own baseline, all current root patches and recent journal summary lines, prepares material, then alternates bounded chat turns. It writes a terminal snapshot and relationship digests. Party continuity lives in `src/discord_party/` and keeps incremental attributed source coverage. These are separate stores, not interchangeable receipts. Night-digest completion uses a successful native Stop event; Party continuity verifies transcript evidence.
+紙條與夜聊位於 `src/a2a/`。紙條使用受原生回合限制的操作授權及回執。夜聊會快照各自的基線、根層所有現行 patches，以及近期 journal 摘要行，準備素材後在額度內輪流聊天，最後寫入結束快照與關係摘要。Party 經歷延續機制位於 `src/discord_party/`，以增量方式追蹤有來源歸屬的涵蓋範圍。這幾套資料分開儲存，回執不能混用。夜聊摘要以成功的原生 Stop 事件判定完成；Party 經歷讀回則核對逐字稿證據。
 
 ```mermaid
 flowchart LR
-    N[Native turn with explicit relay intent] --> Mail[Local note mailbox]
-    Mail --> Receiver[Recipient native turn]
-    Receiver --> Receipt[Verified receipt and body removal]
-    Packs[Two separate canonical packs] --> Night[Guarded nightly coordinator]
-    Materials[Explicit selected material] --> Night
-    Night --> Archive[Encrypted terminal conversation]
-    Archive --> Digest[Relationship digest hook]
+    N[有明確轉達意圖的原生回合] --> Mail[本機紙條信箱]
+    Mail --> Receiver[收件者原生回合]
+    Receiver --> Receipt[驗證回執並移除本文]
+    Packs[兩份獨立正式人格包] --> Night[受防護的夜聊協調程式]
+    Materials[明確選取的素材] --> Night
+    Night --> Archive[加密的結束對話]
+    Archive --> Digest[關係摘要 hook]
 ```
 
-Native live execution is macOS-specific: the write guard uses `sandbox-exec`; authentication uses the installed native CLIs. The guard protects configured source paths from writes. It is not a whole-machine security sandbox. Room/summary tool restrictions and output validation add separate boundaries; see [privacy](privacy.md).
+真實原生執行依賴 macOS：寫入防護使用 `sandbox-exec`，驗證身分使用已安裝的原生 CLI。防護會禁止寫入設定中的來源路徑，但不等於整台電腦的安全沙箱。房間／摘要的工具限制與輸出驗證是另外幾層邊界，詳見 [隱私](privacy.md)。
 
-Public identities are fixed adapter slots: `agent_a` uses Claude for Party/nightly mixed runs, `agent_b` uses Codex. Manual calibration can use two Codex runs. Additional personas and arbitrary remote agents require new adapter/registry work; no automatic discovery is claimed.
+公開版使用固定 adapter 角色槽位：Party／夜聊的混合引擎模式中，`agent_a` 使用 Claude，`agent_b` 使用 Codex；手動校準可使用兩個 Codex。增加人格或任意遠端 agent 需要另做 adapter／registry 整合，本版不提供自動探索。

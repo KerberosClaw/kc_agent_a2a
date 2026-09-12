@@ -1,36 +1,38 @@
-# Interfaces and contracts
+# 介面與契約
 
-[Documentation index](index.md) · [Data model](data-model.md) · [Operations](operations.md)
+> **English summary:** The preview exposes CLI, Python, hook, and file contracts rather than an HTTP API. Grants bind exact content and audiences; delivery, readback, and explicit canonical saves validate their own authority and evidence.
 
-This preview exposes Python/CLI and native hook/file contracts, not a network API. There is no REST endpoint or OpenAPI document to install.
+[文件索引](index.md) · [資料模型](data-model.md) · [維運](operations.md)
 
-| Entry | Inputs | Outputs / authority |
+本預覽版提供 Python／CLI、原生 hook 與檔案契約，沒有網路 API，不需要安裝 REST endpoint 或 OpenAPI 文件。
+
+| 入口 | 輸入 | 輸出／授權 |
 | --- | --- | --- |
-| `agent-a2a-demo` | None | Synthetic JSON metrics; no external calls |
-| `setup_preview.py` | Explicit root; room and participant IDs for room setup | Local config and pending review; approval is a separate subcommand |
-| Guarded `agent-a2a` | `preflight`, `start`, `status`, `tick`, `enable`, `disable`, `stop` | Local run state; start/tick may call real models |
-| `agent-note` | Current native hook token; operation and bounded JSON body | Note IDs, scoped receive/ack instructions or redacted error |
-| `party.py` | Registry JSON, independent state directory, restricted token file, approved grant | Local status or a live Discord client |
-| `manage.py` | `start`, `stop`, `status`, explicit runtime | Owned process records; start is not READY |
-| `continuity.py` | Config, `tick`, `status`, `save-*` operations | Summary jobs, ledger status, explicit save lifecycle |
+| `agent-a2a-demo` | 無 | 合成 JSON 指標，不呼叫外部服務 |
+| `setup_preview.py` | 明確根目錄；設定房間時提供房間與參與者 ID | 本機設定與待審查內容；核准使用另一個子指令 |
+| 受防護的 `agent-a2a` | `preflight`、`start`、`status`、`tick`、`enable`、`disable`、`stop` | 本機執行狀態；start／tick 可能呼叫真實模型 |
+| `agent-note` | 當前原生 hook token、操作與有大小限制的 JSON 本文 | 紙條 ID、受限的 receive／ack 指示，或去敏錯誤 |
+| `party.py` | Registry JSON、獨立狀態目錄、受限 token 檔與核准授權 | 本機狀態或真實 Discord client |
+| `manage.py` | `start`、`stop`、`status` 與明確 runtime | 所管理的程序紀錄；start 不等於 READY |
+| `continuity.py` | 設定、`tick`、`status`、`save-*` 操作 | 摘要工作、帳本狀態與明確存檔生命週期 |
 
-CLI help is authoritative for flags. Commands print JSON where practical and exit nonzero on rejected operations. Some runtime status reports include private content; treat output as private even when a failure message is redacted.
+旗標以 CLI help 為準。適合的指令會輸出 JSON，拒絕操作時回傳非零 exit code。部分 runtime 狀態報告含私人內容，即使錯誤訊息已去敏，整份輸出仍應視為私人資料。
 
-## Registry and approval
+## Registry 與核准
 
-A registry has `guild_id`, `channel_id`, `human_ids`, `bot_owners`, `self_id`, and `protocol: 1`. IDs are decimal strings. Exactly two bot identities map to `agent_a`/`agent_b`; the manifest must match them and the registered audience. `intended_scope`, `approved_by`, `approved_at`, and SHA-256 hashes of both cards and `room_boundary.md` bind a grant to exact contents. `review/current` selects the active approved revision.
+Registry 包含 `guild_id`、`channel_id`、`human_ids`、`bot_owners`、`self_id` 與 `protocol: 1`。ID 使用十進位字串；恰好兩個 bot 身分對應 `agent_a`／`agent_b`，manifest 必須與它們及已註冊受眾相符。`intended_scope`、`approved_by`、`approved_at`，以及兩份人格卡和 `room_boundary.md` 的 SHA-256 hash，會把授權綁定到確切內容。`review/current` 選擇目前有效的核准 revision。
 
-A changed manifest invalidates an in-flight grant. Audience expansion requires explicit history-sharing fields and a state migration; changing a display name does not grant membership. Internal compatibility is enforced by registry/schema checks, not a promise of a stable plugin API.
+Manifest 改變會使執行中的授權失效。擴充受眾需要明確的歷史分享欄位與狀態遷移；改顯示名稱不代表加入成員。內部相容性由 registry／schema 檢查維持，不代表承諾穩定的 plugin API。
 
-## Native decisions and hooks
+## 原生決定與 hook
 
-Party decisions return `request_id`, `action` (`speak` or `wait`) and `content` under the adapter's structured-output schema. Request identity, content limits and permitted tool traces are checked before delivery. Inputs carry author/message IDs and times; models may not invent source refs. Exact schemas and allowlists live in [native.py](../src/discord_party/native.py) and tests.
+Party 依 adapter 的結構化輸出 schema 回傳 `request_id`、`action`（`speak` 或 `wait`）與 `content`。送出前檢查請求身分、內容限制與允許的工具軌跡。輸入帶有作者／訊息 ID 及時間，模型不可捏造來源引用。完整 schema 與允許清單在 [native.py](../src/discord_party/native.py) 及測試中。
 
-Hooks require the expected session, root, event, input ID and native transcript. Subagent events and mismatched roots are excluded. Note send authority is scoped to the current human turn. `receive` and `ack` register candidate processing; reconciliation verifies the real native turn before a terminal receipt/body removal. For Party continuity, a summary being printed by a hook is not by itself a confirmed read: native transcript reconciliation is required. The older night-digest hook instead records completion from the successful Stop event and assistant reply; it does not use the same transcript-backed receipt ledger.
+Hook 要求預期的 session、根目錄、事件、輸入 ID 與原生逐字稿；排除 subagent 事件及根目錄不符的輸入。紙條寄送授權只涵蓋當前真人回合。`receive` 和 `ack` 登記候選處理，對帳會核對真實原生回合，才建立最終回執並移除本文。Party 經歷摘要即使由 hook 印出，也不能直接算已讀，還需要原生逐字稿對帳。較早的夜聊 digest hook 則從成功的 Stop 事件與 assistant 回覆記錄完成，沒有使用同一套逐字稿回執帳本。
 
-## Canonical save lifecycle
+## 正式人格存檔生命週期
 
-Run save operations from the registered persona root using an absolute path to the public helper and config:
+在註冊的人格根目錄執行存檔操作，使用公開 helper 與設定的絕對路徑：
 
 ```text
 continuity.py --config CONFIG save-begin [--claim-id CLAIM]
@@ -39,4 +41,4 @@ continuity.py --config CONFIG save-commit --save-id SAVE --file RELATIVE_FILE --
 continuity.py --config CONFIG save-abort --save-id SAVE
 ```
 
-`save-begin` freezes batch refs and the canonical Git base. The persona assesses those experiences and writes justified files itself; the helper is not an automatic personality editor. `save-commit` accepts only the supported patch/journal paths, checks staged content, base/lock and encryption, then records a generic commit and backup status. Resume reconciles a prior commit by manifest; abort preserves files and leaves batches pending. Read [continuity_save.py](../src/discord_party/continuity_save.py) before writing an integration.
+`save-begin` 凍結批次引用與正式人格 Git base。人格自行評估這些經歷並寫出有理由的檔案，helper 不會自動編輯人格。`save-commit` 只接受支援的 patch／journal 路徑，檢查 staged 內容、base／lock 與加密後，記錄不含私人細節的 commit 及備份狀態。Resume 透過 manifest 對帳先前的 commit；abort 保留檔案，批次維持待評估。撰寫整合前先讀 [continuity_save.py](../src/discord_party/continuity_save.py)。
