@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kc-agent-a2a"
+version = "0.1.0a1"
+description = "Bounded agent notes, nightly conversations, Discord Party and continuity"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [{name = "KerberosClaw"}]
+readme = "README.md"
+dependencies = ["discord.py==2.7.1"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["a2a*", "discord_party*"]
+
+[project.scripts]
+agent-a2a-demo = "a2a.demo:main"

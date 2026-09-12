@@ -1,0 +1,2 @@
+# Gateway SDK only. Models/private persona adapters are deliberately not loaded.
+discord.py==2.7.1
