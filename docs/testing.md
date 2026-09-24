@@ -21,6 +21,9 @@ Runner 會探索各個獨立測試根目錄，回報數量、失敗及略過項�
 | 授權、成員、歷史限制、token 儲存 | Native gate、membership、pilot、installation 測試 |
 | 摘要競態防護、涵蓋範圍、回執、存檔對帳 | Continuity 與 canonical save 測試 |
 | 整理來源歸屬與拒絕發布 | Sharing 測試 |
+| 按需搜尋／分頁、權限撤回、短效 MCP、無資料接力與回覆重複 | Life context／tools、dialogue、native、state 測試 |
+| 最近五篇回填、修訂撤回、自己的 journal 隔離、引用、競態及背景模型設定 | Shared context／native 測試 |
+| 新 boot 一次啟動、部分死亡不重啟、通知去重與每安裝 label | Watchdog／continuity install 測試 |
 | 通用設定與升級保留狀態 | Public setup、note installation、manager、continuity install 測試 |
 
 CI 在 Linux 與 macOS 執行離線測試、示範及連結檢查。本機發布驗證另在新的 venv 建置／安裝 Python 套件，並實際渲染 Mermaid。連結檢查器驗證 repo 目標與 anchors，不會連網，也不能證明 Mermaid 可渲染，因此渲染是獨立的發布檢查。
@@ -28,3 +31,5 @@ CI 在 Linux 與 macOS 執行離線測試、示範及連結檢查。本機發布
 真實登入、Discord 權限、hook 信任／回執、模型工具軌跡格式、選用搜尋與對話品質，須由操作者在隔離房間驗收。公開 CI 沒有真實憑證，離線測試通過不能證明這些外部系統已通過。
 
 有效的錯誤回報應包含版本、作業系統／原生 CLI 版本、移除本機路徑與 ID 的失敗指令、預期／實際狀態，以及最小虛構重現案例。不可附 token、真實人格、逐字稿、資料庫或原始供應者回應。
+
+本次 `v0.2.0-alpha.1` 的發布驗證紀錄見[版本驗證](verification-v0.2.md)。測試 fixtures 全為合成角色與事件，不能用真實日記取代。

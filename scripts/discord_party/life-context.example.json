@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "status": "pending",
+  "approved_by": "REPLACE_WITH_OWNER_ID",
+  "approved_at": null,
+  "intended_scope": {
+    "guild_id": "100000000000000001",
+    "channel_id": "100000000000000002",
+    "human_ids": [
+      "100000000000000010"
+    ]
+  },
+  "life_wiki_root": "/absolute/path/to/your/knowledge",
+  "defaults": {
+    "allow": [
+      "identity",
+      "aliases",
+      "basic_relationship",
+      "met_via",
+      "common_circle",
+      "coarse_location"
+    ],
+    "deny": [
+      "exact_address",
+      "live_location",
+      "health",
+      "intimacy",
+      "private_transcript",
+      "work_secret"
+    ]
+  },
+  "home_context": {
+    "label": "住家生活圈",
+    "area": "行政區或大型地標"
+  },
+  "people_overrides": {
+    "範例人物": {
+      "aliases": [
+        "常用暱稱"
+      ],
+      "safe_relationship": "可在 Party 提供的基本關係",
+      "common_circle": "可在 Party 提供的共同朋友圈"
+    }
+  },
+  "shared_context": {
+    "mode": "daily_life_and_own_interactions",
+    "backfill_count": 5,
+    "root": "/absolute/path/to/installation/party/shared-context",
+    "journal_roots": {
+      "agent_a": "/absolute/path/to/personas/agent_a",
+      "agent_b": "/absolute/path/to/personas/agent_b"
+    },
+    "agent_bot_ids": {
+      "agent_a": "100000000000000020",
+      "agent_b": "100000000000000030"
+    }
+  }
+}

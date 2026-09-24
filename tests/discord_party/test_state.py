@@ -205,6 +205,74 @@ class StateCase(unittest.TestCase):
         self.feed(event(501, '30'))
         self.assertIsNone(self.a.begin())
 
+    def test_near_duplicate_self_reply_in_same_human_epoch_is_suppressed(self):
+        self.feed(event(100, content='小林跟小禾是什麼關係？'))
+        self.send(self.a, text='小林就是林登，小禾的同學；簡單講，他們是同學關係。')
+        self.mid += 1
+        self.feed(event(self.mid, '30', '同學啊，小禾就是小林的老同學。'))
+        request = self.a.begin()
+        self.assertIsNotNone(request)
+        self.assertTrue(self.a.finish(
+            request, 'speak', '小林就是林登，跟小禾是同學；簡單說，他們是同學／朋友關係。'))
+        self.assertIsNone(self.a.submit(request))
+        self.assertEqual(self.a.snapshot()['remaining'], 9)
+        self.assertEqual(self.a.db.execute(
+            'SELECT status FROM attempts WHERE request_id=?', (request,)).fetchone()[0],
+            'suppressed_duplicate')
+
+    def test_distinct_followup_in_same_human_epoch_is_kept(self):
+        self.feed(event(100, content='聊晚餐'))
+        self.send(self.a, text='先去吃牛肉麵，今天不要再拿餅乾混過去。')
+        self.mid += 1
+        self.feed(event(self.mid, '30', '那家店今天沒開，換一間。'))
+        request = self.a.begin()
+        self.assertIsNotNone(request)
+        self.assertTrue(self.a.finish(request, 'speak', '那就改吃水餃，至少不用再查營業時間。'))
+        self.assertIsNotNone(self.a.submit(request))
+
+    def test_two_no_information_answers_close_the_epoch_without_peer_ping_pong(self):
+        self.feed(event(100, content='小鷺呢？'))
+        self.send(self.a, text='小鷺我這邊沒有建檔，跟房主的關係不能確定。')
+        self.mid += 1
+        triggered_a, _ = self.feed(event(
+            self.mid, '30', '小鷺目前只知道名字，跟朋友的關係沒資料。'))
+        self.assertFalse(triggered_a)
+        self.assertEqual(self.a.snapshot()['participation'], 'closed')
+        self.assertIsNone(self.a.begin())
+        self.feed(event(500, content='換個話題'))
+        self.assertEqual(self.a.snapshot()['participation'], 'listening')
+        self.assertIsNotNone(self.a.begin())
+
+    def test_second_generated_no_information_answer_is_suppressed_and_closes(self):
+        self.feed(event(100, content='小鷺呢？'))
+        self.mid += 1
+        self.feed(event(self.mid, '30', '小鷺我這邊沒有建檔，跟房主的關係不能確定。'))
+        request = self.a.begin()
+        self.assertIsNotNone(request)
+        self.assertTrue(self.a.finish(
+            request, 'speak', '小鷺目前只知道名字，關係欄是空白，不能靠猜的補。'))
+        self.assertIsNone(self.a.submit(request))
+        self.assertEqual(self.a.snapshot()['participation'], 'closed')
+        self.assertEqual(self.a.db.execute(
+            'SELECT status FROM attempts WHERE request_id=?', (request,)).fetchone()[0],
+            'suppressed_no_information')
+
+    def test_repeated_answer_prefix_is_trimmed_but_new_banter_is_kept(self):
+        self.feed(event(100, content='小杉跟房主是什麼關係？'))
+        self.send(self.a, text='小杉是房主的同學，也就是多年同學關係。')
+        self.mid += 1
+        self.feed(event(self.mid, '30', '你自己同學還要在群裡問這題？'))
+        request = self.a.begin()
+        self.assertIsNotNone(request)
+        self.assertTrue(self.a.finish(
+            request, 'speak',
+            '小杉是房主的同學，也就是多年同學。朋友你這是在做校友名冊整理是不是🤣'))
+        row = self.a.submit(request)
+        self.assertEqual(row['content'], '朋友你這是在做校友名冊整理是不是🤣')
+        self.assertEqual(self.a.db.execute(
+            'SELECT status FROM attempts WHERE request_id=?', (request,)).fetchone()[0],
+            'trimmed_duplicate')
+
     def test_confirmed_failure_releases_reservation_without_replaying_source(self):
         self.feed(event(100))
         request = self.a.begin()

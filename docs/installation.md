@@ -100,7 +100,7 @@ python scripts/discord_party/manage.py start --runtime "$HOME/agent-a2a-preview/
 python scripts/discord_party/manage.py status --runtime "$HOME/agent-a2a-preview/party"
 ```
 
-`start` 在 connector 驗證房間後就可能送出真實回覆。先在本機 bot 日誌確認 READY，再由真人發一則測試訊息。兩個 bot 各回一則是可能的；同一個 bot 重複送達則需要調查。不要靠一直刪除狀態重試。此管理器啟動背景程序，不是開機自動啟動服務；預覽版的 Party 重開機排程由操作者自行處理。
+`start` 在 connector 驗證房間後就可能送出真實回覆。先在本機 bot 日誌確認 READY，再由真人發一則測試訊息。兩個 bot 各回一則是可能的；同一個 bot 重複送達則需要調查。不要靠一直刪除狀態重試。此管理器啟動背景程序。需要登入後檢查／故障通知時，可另行設定[選用 watchdog](watchdog.md)；它不是無人登入的系統 daemon，也不保證模型可用。
 
 ## 經歷延續與選用的人格視圖更新
 
@@ -123,3 +123,7 @@ python scripts/discord_party/manage.py start --runtime "$HOME/agent-a2a-preview/
 啟用衍生視圖前，確認每個共享結果都是 `published`。更新失敗不能回報人格已成功更新。沒有啟用這個選項時，只使用已明確審查的初始人格卡。
 
 `scripts/discord_party/install_continuity.py` 是**升級 helper**，要求既有的版本化 `party/current`、其 `.venv`、已安裝的讀回 helper，以及兩份核准的衍生視圖。它不是上面的全新安裝指令，詳見 [升級與復原](operations.md)。
+
+## 選用生活與相處脈絡
+
+全新安裝維持關閉；需要人物、生活日記及自己的 journal 查詢時，依[共享脈絡](context.md)建立外部資料目錄、批准政策與設定，先用虛構資料驗收。檔案格式與政策都是明確契約，不能只指定任意資料夾就假設能讀。

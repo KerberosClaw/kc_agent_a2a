@@ -6,11 +6,21 @@ Never hold a transaction over network or model I/O.
 import fcntl
 import hashlib
 import json
+import re
 import sqlite3
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+from difflib import SequenceMatcher
 from pathlib import Path
+
+
+NO_INFORMATION = re.compile(
+    r'沒(?:有)?(?:資料|建檔|記錄|紀錄|寫)|沒有相關?(?:資料|記錄|紀錄)|查不到|'
+    r'無法確認|不能確定|不(?:太)?確定|不知道|不清楚|資料庫.{0,5}(?:沒有|空)|'
+    r'(?:欄位|關係).{0,8}(?:空白|是空的|沒(?:有)?(?:資料|建檔|記錄|紀錄|寫))|'
+    r'我這邊.{0,6}(?:也是)?空(?:的|白)?'
+)
 
 
 class NotReady(RuntimeError):
@@ -132,6 +142,8 @@ class State:
             if (self.db.execute('PRAGMA integrity_check').fetchone()[0] != 'ok'
                     or tuple(self.db.execute('SELECT registry,version FROM config').fetchone()) != (registry.canonical(), 1)):
                 raise NotReady('State corrupt or registry changed; restore/reconcile explicitly')
+            # Additive metadata only; original events, quotas and outbox schema stay intact.
+            self.db.execute('CREATE TABLE IF NOT EXISTS context_origins (request_id TEXT PRIMARY KEY REFERENCES outbox(request_id), source_refs TEXT NOT NULL)')
             self.disconnected()
         except Exception:
             self.close()
@@ -191,6 +203,22 @@ class State:
                 self._invalidate()
                 self.db.execute('UPDATE state SET grant_version=?,armed=0', (version,))
 
+    @staticmethod
+    def _no_information(content):
+        return bool(NO_INFORMATION.search(content or ''))
+
+    def _epoch_has_no_information(self, epoch, role):
+        rows = self.db.execute(
+            'SELECT message_id,content FROM events WHERE role=?', (role,)).fetchall()
+        if any(int(row['message_id']) > int(epoch) and self._no_information(row['content'])
+               for row in rows):
+            return True
+        if role == 'self':
+            rows = self.db.execute(
+                "SELECT content FROM outbox WHERE epoch=? AND status='delivered'", (epoch,)).fetchall()
+            return any(self._no_information(row['content']) for row in rows)
+        return False
+
     def ingest(self, event: Event, *, historical=False):
         role = event.role(self.registry)
         if role is None:
@@ -215,7 +243,12 @@ class State:
                 if event.content in ('先停一下', '繼續聊'):
                     self.db.execute('UPDATE state SET paused=?,control_id=?',
                                     (int(event.content == '先停一下'), event.message_id))
-            trigger = (live and fresh and role in ('human', 'peer'))
+            exhausted = (live and fresh and role == 'peer' and state['epoch']
+                         and self._no_information(event.content)
+                         and self._epoch_has_no_information(state['epoch'], 'self'))
+            if exhausted:
+                self.db.execute("UPDATE state SET participation='closed'")
+            trigger = (live and fresh and role in ('human', 'peer') and not exhausted)
             self.db.execute('UPDATE events SET attempted=? WHERE channel_id=? AND message_id=?',
                             (int(not trigger), event.channel_id, event.message_id))
             return trigger
@@ -254,7 +287,25 @@ class State:
                     and s['ready'] and s['armed'] and not s['paused'] and s['remaining'] > 0
                     and s['participation'] != 'closed')
 
-    def finish(self, request, action, content=''):
+    @staticmethod
+    def _near_duplicate(left, right):
+        """Catch a bot restating its own answer after a peer reply in one human epoch."""
+        clean = lambda value: re.sub(r'[\W_]+', '', value, flags=re.UNICODE)
+        left, right = clean(left), clean(right)
+        return min(len(left), len(right)) >= 12 and SequenceMatcher(None, left, right).ratio() >= 0.8
+
+    @classmethod
+    def _without_repeated_prefix(cls, content, previous):
+        """Keep a fresh follow-up after removing a sentence that repeats an earlier answer."""
+        match = re.match(r'^(.+?[。！？!?])\s*(.+)$', content.strip(), re.S)
+        if match and cls._near_duplicate(match.group(1), previous):
+            return match.group(2).strip()
+        return content
+
+    def finish(self, request, action, content='', *, source_refs=()):
+        if (not isinstance(source_refs, (list, tuple)) or len(source_refs) > 512
+                or any(not isinstance(ref, str) or len(ref) > 200 for ref in source_refs)):
+            raise NotReady('Invalid context source references')
         with self.db:
             a = self.db.execute('SELECT * FROM attempts WHERE request_id=?', (request,)).fetchone()
             if not a or a['status'] != 'generating':
@@ -269,9 +320,32 @@ class State:
             if action == 'pass' or not content.strip():
                 self.db.execute('UPDATE state SET participation=?', ('closed' if action == 'close' else 'listening',))
                 return True
+            if (self._no_information(content)
+                    and self._epoch_has_no_information(a['epoch'], 'peer')):
+                self.db.execute(
+                    "UPDATE attempts SET status='suppressed_no_information' WHERE request_id=?", (request,))
+                self.db.execute("UPDATE state SET participation='closed'")
+                return True
+            previous = self.db.execute(
+                "SELECT content FROM outbox WHERE epoch=? AND status='delivered' ORDER BY rowid DESC",
+                (a['epoch'],)).fetchall()
+            if action == 'speak':
+                trimmed = content
+                for row in previous:
+                    trimmed = self._without_repeated_prefix(trimmed, row['content'])
+                if any(self._near_duplicate(trimmed, row['content']) for row in previous):
+                    self.db.execute("UPDATE attempts SET status='suppressed_duplicate' WHERE request_id=?", (request,))
+                    self.db.execute("UPDATE state SET participation='listening'")
+                    return True
+                if trimmed != content:
+                    content = trimmed
+                    self.db.execute("UPDATE attempts SET status='trimmed_duplicate' WHERE request_id=?", (request,))
             nonce = str(int.from_bytes(hashlib.sha256(request.encode()).digest()[:8], 'big'))
             self.db.execute('INSERT INTO outbox VALUES (?,?,?,?,?,?,NULL,0)',
                             (request, a['epoch'], nonce, content, int(action == 'close'), 'queued'))
+            if source_refs:
+                self.db.execute('INSERT INTO context_origins VALUES (?,?)',
+                                (request, json.dumps(sorted(set(source_refs)))))
             return True
 
     def submit(self, request):

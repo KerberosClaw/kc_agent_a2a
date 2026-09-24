@@ -30,6 +30,23 @@ class ActiveReviewCase(unittest.TestCase):
                 if agent == 'archive':
                     self.assertEqual(argv[argv.index('--content')+1],str(root/'custom-content'))
 
+    def test_start_passes_private_life_context_policy_to_bots_only(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'logs').mkdir()
+            selected = root / 'review/v2'; selected.mkdir(parents=True)
+            (root / 'review/current').symlink_to(selected)
+            (root / 'manager.json').write_text(json.dumps({'content': str(root / 'content'), 'existing_writer_lock': str(root / 'writer.lock')}))
+            policy = root / 'config/life-context.json'; policy.parent.mkdir()
+            policy.write_text('{}')
+            with patch.object(manager.subprocess, 'Popen', return_value=SimpleNamespace(pid=123456)):
+                manager.manage(root, 'start')
+            for agent in ('agent_a', 'agent_b'):
+                argv = json.loads((root / 'run' / (agent + '.json')).read_text())['argv']
+                self.assertEqual(argv[argv.index('--life-context-policy') + 1], str(policy.resolve()))
+            archive = json.loads((root / 'run/archive.json').read_text())['argv']
+            self.assertNotIn('--life-context-policy', archive)
+
     def test_broken_selection_does_not_fall_back_and_stop_still_works(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

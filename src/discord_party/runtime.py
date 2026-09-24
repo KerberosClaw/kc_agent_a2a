@@ -86,7 +86,8 @@ class Runtime:
                 self.disconnect()
                 logging.getLogger('discord_party').error('NATIVE_NOT_READY authorization changed')
                 continue
-            if not self.state.finish(request, action, content):
+            refs = (getattr(self.engine, 'last_audit', None) or {}).get('context_source_refs', [])
+            if not self.state.finish(request, action, content, source_refs=refs):
                 continue
             row = self.state.submit(request)
             if not row:

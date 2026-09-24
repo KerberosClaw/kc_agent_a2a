@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import discord
 from test_state import event, registry
 
-from discord_party.connector import HTTPTransport, PartyClient, read_token
+from discord_party.connector import HTTPTransport, PartyClient, read_token, synchronization_reason
 from discord_party.runtime import Runtime, SyntheticEngine
 from discord_party.state import NotReady, State
 
@@ -18,6 +18,13 @@ def message(mid=100, author=10, *, content='hello', bot=False, nonce=None, chann
               guild=NS(id=guild_id) if guild_id else None, content=content,
               created_at=datetime(2026,9,9,tzinfo=timezone.utc), type=discord.MessageType.default,
               webhook_id=None, nonce=nonce)
+
+
+class ReasonCodeCase(unittest.TestCase):
+    def test_sync_errors_are_bounded_codes(self):
+        self.assertEqual(synchronization_reason(NotReady('Missing party permissions')), 'permissions_missing')
+        self.assertEqual(synchronization_reason(NotReady('private dynamic detail')), 'not_ready_other')
+        self.assertEqual(synchronization_reason(ValueError('secret')), 'unexpected')
 
 
 class HTTPCase(unittest.IsolatedAsyncioTestCase):

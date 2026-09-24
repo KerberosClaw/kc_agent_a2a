@@ -13,6 +13,15 @@ class BoundaryError(RuntimeError):
     pass
 
 
+class NativeRefusal(BoundaryError):
+    """Server-side refusal of a well-formed call. Unlike other boundary failures the identical
+    request may be resent, so only this subclass is eligible for an automatic retry."""
+
+    def __init__(self, message, *, category=None):
+        super().__init__(message)
+        self.category = category
+
+
 def atomic_write(path: Path, data: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     fd, name = tempfile.mkstemp(dir=path.parent, prefix=".pending-")

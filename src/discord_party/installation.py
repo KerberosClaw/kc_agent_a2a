@@ -48,3 +48,9 @@ def read_status(root: Path, registry: Registry):
         return dict(db.execute('SELECT * FROM state WHERE id=1').fetchone())
     finally:
         db.close()
+
+
+def watchdog_label(runtime):
+    """Scope launchd ownership to this installation, not another user's service."""
+    import hashlib
+    return 'org.agent-a2a.party-watchdog.' + hashlib.sha256(str(Path(runtime).resolve()).encode()).hexdigest()[:12]

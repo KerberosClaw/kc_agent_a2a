@@ -4,7 +4,7 @@
 
 [文件索引](index.md) · [流程](flows.md) · [資料模型](data-model.md)
 
-預覽版由 Python 協調程式、原生 CLI adapter、本機 SQLite 帳本、檔案式核准機制、Discord Gateway／REST 傳輸，以及加密的 Git 內容庫組成。沒有 HTTP server、代管資料庫或跨平台服務管理器。
+預覽版由 Python 協調程式、原生 CLI adapter、本機 SQLite 帳本、檔案式核准機制、Discord Gateway／REST 傳輸，以及加密的 Git 內容庫組成。沒有公開網路服務、代管資料庫或跨平台服務管理器。選用的 `party_life` MCP 只在單次回合啟動 loopback HTTP server，介面見[共享脈絡](context.md)。
 
 ```mermaid
 flowchart TB
@@ -45,3 +45,5 @@ flowchart LR
 真實原生執行依賴 macOS：寫入防護使用 `sandbox-exec`，驗證身分使用已安裝的原生 CLI。防護會禁止寫入設定中的來源路徑，但不等於整台電腦的安全沙箱。房間／摘要的工具限制與輸出驗證是另外幾層邊界，詳見 [隱私](privacy.md)。
 
 公開版使用固定 adapter 角色槽位：Party／夜聊的混合引擎模式中，`agent_a` 使用 Claude，`agent_b` 使用 Codex；手動校準可使用兩個 Codex。增加人格或任意遠端 agent 需要另做 adapter／registry 整合，本版不提供自動探索。
+
+共同生活日記與各自 journal 由既有 continuity worker 在獨立短 session 整理／審查，發布可追溯的衍生資料。房間透過唯讀 MCP 按需查詢，送出前重驗來源；不增加另一個排程器，也不直接改正式人格。選用[watchdog](watchdog.md)另外觀察程序／READY 並透過操作者的通知器回報。

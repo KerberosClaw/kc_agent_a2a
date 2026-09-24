@@ -187,6 +187,21 @@ def commit_save(state, root, agent, sid, files, message):
         if any(p in frozen and p.startswith('patches/') for p in changed):
             raise NotReady('Existing persona patches are immutable; write a new correction')
         manifest_path = 'continuity/saves/' + sid + '.json'
+        # The sidecar links official journals to assessed Party sources without
+        # inserting metadata or generated summaries into the journal itself.
+        manifest = json.loads(row['manifest'])
+        manifest['journal_files'] = sorted(n for n in selected if n.startswith('journal/'))
+        upstream_refs = set()
+        for bid in manifest['batch_ids']:
+            batch = state.db.execute('SELECT body FROM batches WHERE id=?', (bid,)).fetchone()
+            if batch:
+                for source in json.loads(batch['body']).get('sources', []):
+                    original = state.db.execute('SELECT body FROM sources WHERE seq=?', (source['seq'],)).fetchone()
+                    if original:
+                        upstream_refs.update(json.loads(original['body']).get('context_source_refs', []))
+        manifest['upstream_refs'] = sorted(upstream_refs)
+        state.db.execute('UPDATE saves SET manifest=? WHERE id=?', (encode(manifest), sid))
+        row = get_save(state, sid, agent)
         selected.append(manifest_path)
         staged = git(root, 'diff', '--cached', '--name-only', '-z').decode().strip('\0').split('\0')
         if set(staged) - {'', *selected}:

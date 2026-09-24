@@ -25,7 +25,7 @@ def repository_lock(content, existing_writer_lock):
 
 def collect(runtime, grant_root):
     runtime = Path(runtime)
-    events, grants = {}, {}
+    events, grants, origins = {}, {}, {}
     for agent in ('agent_a', 'agent_b'):
         config = json.loads((runtime / 'config' / (agent + '.json')).read_text())
         config['human_ids'] = tuple(config['human_ids'])
@@ -43,10 +43,16 @@ def collect(runtime, grant_root):
                 if key in events and events[key] != msg:
                     raise NotReady('Conflicting room event snapshots')
                 events[key] = msg
+            if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='context_origins'").fetchone():
+                for row in db.execute("SELECT o.message_id,c.source_refs FROM context_origins c JOIN outbox o USING(request_id) WHERE o.status='delivered'"):
+                    origins[row['message_id']] = json.loads(row['source_refs'])
         finally:
             db.close()
     if grants['agent_a'].version != grants['agent_b'].version:
         raise NotReady('Archive grant mismatch')
+    for key, refs in origins.items():
+        if key in events and events[key]['author_id'] in grants['agent_a'].registry.bot_owners:
+            events[key]['context_source_refs'] = refs
     return sorted(events.values(), key=lambda m: int(m['message_id'])), grants
 
 

@@ -10,6 +10,15 @@ from discord_party.runtime import Runtime, SyntheticEngine
 from discord_party.state import State
 
 
+class DistinctSyntheticEngine(SyntheticEngine):
+    async def decide(self, context, remaining):
+        if remaining <= 8:
+            return 'close', ''
+        if remaining == 10:
+            return 'speak', 'first synthetic transport probe'
+        return 'speak', 'second peer receipt completed'
+
+
 class PilotCase(unittest.IsolatedAsyncioTestCase):
     async def test_two_bots_peer_receipts_pause_and_replay_in_one_room(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -29,7 +38,7 @@ class PilotCase(unittest.IsolatedAsyncioTestCase):
 
             for state in states:
                 state.synchronized()
-                runtimes.append(Runtime(state,SyntheticEngine(),Bus(state.registry.self_id),coalesce=0.001,interval=0))
+                runtimes.append(Runtime(state,DistinctSyntheticEngine(),Bus(state.registry.self_id),coalesce=0.001,interval=0))
             for runtime in runtimes:
                 runtime.start()
             try:

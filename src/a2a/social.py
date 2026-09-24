@@ -35,6 +35,11 @@ def save_snapshot(root, snapshot):
     for msg in snapshot['messages']:
         text += ['**'+msg['author']+'**','',msg['reply'],'']
     atomic_write(files[0],encode(snapshot)+'\n');atomic_write(files[1],'\n'.join(text))
+    if snapshot.get('mode') == 'nightly' and snapshot.get('stop_reason') == 'closure':
+        from .night_recap import build
+        recap = folder / 'recap.json'
+        atomic_write(recap, encode(build(snapshot)) + '\n')
+        files.append(recap)
     relative=[str(p.relative_to(root)) for p in files]
     git(root,'add','--',*relative)
     staged=git(root,'diff','--cached','--name-only','-z').decode().strip('\0').split('\0')

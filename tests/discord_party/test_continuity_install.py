@@ -18,6 +18,19 @@ spec.loader.exec_module(installer)
 
 
 class ContinuityInstallCase(unittest.TestCase):
+    def test_watchdog_is_booted_out_and_resumed_for_maintenance(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(installer.Path, 'home', return_value=Path(tmp)):
+            runtime = Path(tmp) / 'runtime'
+            plist = Path(tmp) / 'Library/LaunchAgents' / (installer.watchdog_label(runtime) + '.plist')
+            plist.parent.mkdir(parents=True); plist.write_text('plist')
+            with patch.object(installer.subprocess, 'run', return_value=type('R', (), {'returncode': 0})()), \
+                    patch.object(installer, 'command') as command:
+                selected = installer.suspend_watchdog(runtime); installer.resume_watchdog(selected)
+            self.assertEqual(selected, plist)
+            self.assertEqual(command.call_count, 2)
+            self.assertEqual(command.call_args_list[0].args[0][1], 'bootout')
+            self.assertEqual(command.call_args_list[1].args[0][1], 'bootstrap')
+
     def test_failed_new_start_restores_pointers_and_hook_without_rolling_back_ledger(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp).resolve(); runtime = root / 'runtime'; source = root / 'source'

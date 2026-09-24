@@ -23,6 +23,7 @@ def main():
     parser.add_argument('--memory', type=Path)
     parser.add_argument('--shared-view', type=Path)
     parser.add_argument('--experience-memory', type=Path)
+    parser.add_argument('--life-context-policy', type=Path)
     args = parser.parse_args()
     config = json.loads(args.config.read_text())
     config['human_ids'] = tuple(config['human_ids'])
@@ -47,10 +48,14 @@ def main():
                     if not all((args.grant, args.agent, args.native_work)):
                         parser.error('--grant, --agent and --native-work are required')
                     from discord_party.native import Grant, NativeEngine
+                    from discord_party.life_context import LifeContextResolver
                     grant = Grant(outside_repository(args.grant), args.agent, registry)
+                    life_context = (LifeContextResolver(outside_repository(args.life_context_policy), registry)
+                                    if args.life_context_policy else None)
                     engine = NativeEngine(grant, outside_repository(args.native_work),
                                           memory=outside_repository(args.memory) if args.memory else None,
-                                          shared_view=outside_repository(args.shared_view) if args.shared_view else None)
+                                          shared_view=outside_repository(args.shared_view) if args.shared_view else None,
+                                          life_context=life_context)
                     engine.experience_memory = outside_repository(args.experience_memory) if args.experience_memory else None
                     state.set_grant(grant.version)
                 client = PartyClient(state, token, engine=engine)

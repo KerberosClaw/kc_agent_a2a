@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 
 from a2a.digest_hook import handle
 from a2a.digests import recent
+from a2a.night_recap import build, validate
 from a2a.nightly import tick,eligible
 from a2a.storage import BoundaryError,Store
 from a2a.coordinator import Coordinator
@@ -40,6 +41,20 @@ class NightlyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);run=self.fixture(root);p=root/'content/runs'/run/'snapshot.json';s=json.loads(p.read_text());s['digests']['agent_a']['shared_message_ids']=['not-shared'];p.write_text(json.dumps(s))
             with self.assertRaises(BoundaryError):recent(root/'content')
+
+    def test_common_recap_preserves_both_authors_and_detects_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);run=self.fixture(root);p=root/'content/runs'/run/'snapshot.json'
+            s=json.loads(p.read_text())
+            mid=s['messages'][0]['id']
+            s['digests']['agent_b']={'author':'agent_b','summary':'另一個角度','shared_message_ids':[mid]}
+            p.write_text(json.dumps(s))
+            recap=build(s)
+            self.assertIn('Agent A的記錄',recap['summary'])
+            self.assertIn('Agent B的記錄',recap['summary'])
+            validate(recap,s)
+            recap['summary']='tampered'
+            with self.assertRaises(BoundaryError):validate(recap,s)
 
     def test_nightly_does_not_call_models_outside_window_or_after_daily_run(self):
         with tempfile.TemporaryDirectory() as tmp:
