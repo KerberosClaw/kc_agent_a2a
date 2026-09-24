@@ -74,6 +74,9 @@ def manage(runtime, command):
                     '--native-work', str(runtime / 'workers' / name),
                     '--memory', str(runtime / 'memory' / (name + '.json')),
                     '--experience-memory', str(runtime / 'experiences' / (name + '.json'))]
+            policy = runtime / 'config/life-context.json'
+            if policy.is_file():
+                argv += ['--life-context-policy', str(policy)]
         if name != 'archive' and (runtime / 'sharing' / name / 'current.json').exists():
             argv += ['--shared-view', str(runtime / 'sharing' / name)]
         log = runtime / 'logs' / (name + '.log')

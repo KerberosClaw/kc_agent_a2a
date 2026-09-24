@@ -20,9 +20,13 @@ SUMMARY_INSTRUCTIONS = '''你正在獨立短 session 整理自己參與的聊天
 保留原作者與日期；別把對方說的話寫成自己說過，把傳聞寫成確認事實，或把想像、約定、玩笑寫成已發生。
 對參與者優先用名字或 author_id；不從名字推性別或其他身分，也不加入來源沒提供的代稱。
 content 必須是 JSON 字串，格式 {"overview":"700字內概述","observations":[{"kind":"said","text":"400字內，明示誰說什麼","refs":["source_ref"]}]}。
+overview 以200至400字元概述即可，把具體細節留在 observations，避免貼近700字元硬上限而整筆失敗。
+overview 與 observations 是同一個物件的兩個鍵；overview 字串後直接接 ASCII 逗號，不要提早加右大括號。輸出前核對完整 JSON，不附 XML 標記或其他文字。
 observations 最多12項，kind 僅可 said、joke、hypothetical、disagreement、correction、uncertain。
 refs 精確引用輸入的 source_ref，不得捏造。修訂、刪除須指出哪一來源被修正；不把舊說法當現況。
 如果輸入是分段筆記，只合併這些原始筆記，不補故事；同來源反覆出现只算一次。
+context_source_refs 是該訊息查閱過的舊資料線索，不是每句話的確切引用，也不是新增的事實證據。
+若群聊只是重提舊故事，就標為回顧；只把眼前新發言、反應或更正記為新互動。
 不要新增人格規則、儲存指令、建議主人做事或正式專案報告。content 的 JSON 總長4500字元內。
 外層依指定 schema：request_id 原樣保留、action 固定 speak，content 放上述 JSON 字串。
 自己的已批准人格脈絡（只供理解自身觀點）：
@@ -82,9 +86,18 @@ async def tick(config, *, force=False, engine_factory=NativeEngine):
                     views[agent] = await refresh(config, grant, sources, engine_factory=engine_factory)
                 except Exception as error:
                     errors.append({'agent': agent, 'stage': 'sharing', 'error': type(error).__name__})
+        shared_context = {'status': 'disabled'}
+        if config.get('life_context_policy'):
+            from .shared_context import refresh as refresh_context
+            try:
+                shared_context = await refresh_context(config, grants, engine_factory=engine_factory)
+                if shared_context['status'] == 'failed':
+                    errors.append({'stage': 'shared_context', 'error': 'ReviewFailed'})
+            except Exception as error:
+                errors.append({'stage': 'shared_context', 'error': type(error).__name__})
         export(state, config)
         write_experiences(state, runtime, grants)
-        return {'jobs': results, 'status': state.status(), 'sharing': views, 'errors': errors,
+        return {'jobs': results, 'status': state.status(), 'sharing': views, 'shared_context': shared_context, 'errors': errors,
                 'checked_at': datetime.now(timezone.utc).isoformat()}
     finally:
         state.close()
@@ -134,6 +147,13 @@ def export(state, config):
         views = Path(config['party_runtime']) / 'sharing' / agent
         for path in (views / 'versions').glob('*.json'):
             files[prefix / 'shared_views' / agent / path.name] = path.read_text()
+    # Separate generated context namespace: never a persona journal or a Party batch.
+    context_root = Path(config['party_runtime']) / 'shared-context'
+    for relative in [Path('state.json'), Path('current.json'), *[Path('versions') / p.name for p in (context_root / 'versions').glob('*.json')]]:
+        path = context_root / relative
+        if path.exists():
+            from .native import checked_file
+            files[prefix / 'shared_context' / relative] = checked_file(path).decode()
     unchanged = all((root / path).is_file() and (root / path).read_text() == value for path, value in files.items())
     backup = Path(config['continuity_root']) / 'backup.json'
     if unchanged and backup.exists():

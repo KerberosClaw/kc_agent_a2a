@@ -13,6 +13,28 @@ from .state import Event, NotReady, State
 log = logging.getLogger('discord_party')
 
 
+def synchronization_reason(error):
+    """Return a bounded reason code without logging Discord content or credentials."""
+    known = {
+        'Discord authorization or channel unavailable': 'discord_authorization',
+        'Pinned rules could not be checked': 'room_rules_unavailable',
+        'Owner-pinned room rules required before native pilot': 'room_rules_missing',
+        'Bot identity or text channel mismatch': 'identity_or_channel',
+        'Pilot bot must belong only to the dedicated social server': 'guild_scope',
+        'Bot membership unavailable': 'membership',
+        'Missing party permissions': 'permissions_missing',
+        'Excessive bot permissions': 'permissions_excessive',
+        'Bot can see an unregistered channel': 'channel_scope',
+        'History gap exceeds catch-up limit; manual reconciliation needed': 'history_gap',
+        'Disconnected during history reconciliation': 'disconnected_during_history',
+    }
+    if isinstance(error, NotReady):
+        return known.get(str(error), 'not_ready_other')
+    if isinstance(error, (aiohttp.ClientError, asyncio.TimeoutError)):
+        return 'discord_api_or_network'
+    return 'unexpected'
+
+
 def to_event(message):
     return Event(str(message.id), str(message.guild.id) if message.guild else '',
                  str(message.channel.id), str(message.author.id), message.content,
@@ -166,9 +188,9 @@ class PartyClient(discord.Client):
                 log.info('%s_READY awaiting new human message; unknown_sends=%d',
                          'SYNTHETIC' if isinstance(self.engine, SyntheticEngine) else 'NATIVE',
                          len(self.party_state.unresolved()))
-            except Exception:  # noqa: BLE001 - boundary fails closed without logging chat or credentials
+            except Exception as error:  # noqa: BLE001 - fail closed; log only bounded reason code
                 self.runtime.disconnect()
-                log.error('NOT_READY: identity, permissions or complete history could not be verified')
+                log.error('NOT_READY reason=%s', synchronization_reason(error))
                 # Stop this new connector only. No model/service/token details in the log.
                 await self.close()
 

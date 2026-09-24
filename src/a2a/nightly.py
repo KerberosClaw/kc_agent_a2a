@@ -1,4 +1,5 @@
-"""One local nightly window, explicit enable/disable, no model polling or automatic retry."""
+"""One local nightly window, explicit enable/disable, no model polling. The only automatic retry is
+resending a call the server refused; an exhausted quota is reported, never retried."""
 from __future__ import annotations
 
 import hashlib
@@ -64,6 +65,13 @@ def tick(data,now=None):
     code=run_trial(data,'私人悄悄話',adapter_factory=MixedAdapter,nightly=True,external_cancelled=cancelled,material_override=material,candidate_cursors=fp,window_id=window)
     latest=status(data,False);report=latest.get('report',{})
     result={'status':report.get('status','failed'),'run_id':latest.get('id'),'backed_up':report.get('backup',{}).get('backed_up',False)}
+    refusals=report.get('refusals') or []
+    if refusals:result['refusals']=[{k:r.get(k) for k in ('agent','purpose','category')} for r in refusals]
+    if report.get('error'):result['error']=report['error']
     atomic_write(data['runtime']/'nightly-last.json',encode(result))
-    if code or not result['backed_up']:raise BoundaryError('nightly failed or backup incomplete; see local report')
+    if code or not result['backed_up']:
+        # Name the actual cause: a refusal, an exhausted quota and a failed backup previously all
+        # surfaced as one indistinguishable line in the launchd error log.
+        raise BoundaryError('nightly incomplete: '+(report.get('error') or 'backup not committed')
+                            +(' [refused '+str(len(refusals))+' call(s)]' if refusals else '')+'; see local report')
     return result

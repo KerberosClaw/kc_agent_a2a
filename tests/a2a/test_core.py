@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from a2a.adapters import SyntheticAdapter
-from a2a.coordinator import Coordinator
+from a2a.coordinator import Coordinator, LIMITS
 from a2a.notes import Mailbox
 from a2a.persona import snapshot
 from a2a.storage import BoundaryError, Store
@@ -158,21 +158,41 @@ class CoreCase(unittest.TestCase):
             self.coord.reserve(run, 'agent_a', 'prepare', DAY)
         self.result(run, agent='agent_b')
 
-    def test_retries_separate_bounded_and_not_recursive(self):
+    def test_retries_chain_but_stay_bounded_and_single_use(self):
+        # A refused call may be resent, and a resend that is refused again may itself be resent,
+        # so retries chain. The budget still caps the chain and no attempt is ever retried twice.
         run = self.run_id()
-        for i in range(3):
+        original = self.coord.reserve(run, 'agent_a', 'chat', DAY)
+        self.coord.dispatched(original)
+        self.coord.fail(original, confirmed=True)
+        parent = original
+        for _ in range(LIMITS['retry']):
+            retry = self.coord.reserve(run, 'agent_a', 'retry', DAY, parent=parent)
+            self.coord.dispatched(retry)
+            self.coord.fail(retry, confirmed=True)
+            with self.assertRaises(BoundaryError):
+                self.coord.reserve(run, 'agent_a', 'retry', DAY, parent=parent)
+            parent = retry
+        with self.assertRaises(BoundaryError):
+            self.coord.reserve(run, 'agent_a', 'retry', DAY, parent=parent)
+        # The whole chain still resolves to the purpose of the original attempt.
+        row = self.store.db.execute('SELECT * FROM attempts WHERE id=?', (parent,)).fetchone()
+        self.assertEqual(self.coord.purpose(row), 'chat')
+
+    def test_retry_budget_is_separate_from_chat_and_prepare(self):
+        run = self.run_id()
+        for _ in range(LIMITS['retry']):
             original = self.coord.reserve(run, 'agent_a', 'chat', DAY)
             self.coord.dispatched(original)
             self.coord.fail(original, confirmed=True)
-            if i == 2:
-                with self.assertRaises(BoundaryError):
-                    self.coord.reserve(run, 'agent_a', 'retry', DAY, parent=original)
-                break
-            retry = self.coord.reserve(run, 'agent_a', 'retry', DAY, parent=original)
-            self.coord.fail(retry, confirmed=True)
-            for parent in (original, retry):
-                with self.assertRaises(BoundaryError):
-                    self.coord.reserve(run, 'agent_a', 'retry', DAY, parent=parent)
+            self.coord.fail(self.coord.reserve(run, 'agent_a', 'retry', DAY, parent=original), confirmed=True)
+        spent = self.coord.reserve(run, 'agent_a', 'chat', DAY)
+        self.coord.dispatched(spent)
+        self.coord.fail(spent, confirmed=True)
+        with self.assertRaises(BoundaryError):
+            self.coord.reserve(run, 'agent_a', 'retry', DAY, parent=spent)
+        # chat budget is untouched by the spent retries
+        self.assertTrue(self.coord.reserve(run, 'agent_a', 'chat', DAY))
 
     def test_unknown_not_retryable(self):
         run = self.run_id()

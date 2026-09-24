@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import sqlite3
 import time
 import uuid
@@ -27,6 +28,12 @@ def fingerprint(value):
 
 
 def decode_result(text):
+    # Native structured output can append serializer closing tags after valid
+    # inner JSON. Strip only this observed suffix, never repair content or accept
+    # arbitrary trailing prose / extra JSON objects.
+    suffix = re.search(r'</content>(?:\s*</invoke>)?\s*$', text)
+    if suffix:
+        text = text[:suffix.start()]
     # Some native structured-output serializers emit literal newlines in the
     # inner JSON string. Accept those, not arbitrary non-whitespace controls.
     value = json.loads(text, strict=False)
@@ -121,6 +128,11 @@ class Continuity:
                     raise NotReady('Oversized source')
                 # Only source data; never propagate arbitrary upstream control fields.
                 body = {k: message[k] for k in required}
+                refs = message.get('context_source_refs', [])
+                if not isinstance(refs, list) or len(refs) > 512 or any(not isinstance(r, str) or len(r) > 200 for r in refs):
+                    raise NotReady('Invalid context source provenance')
+                if refs:
+                    body['context_source_refs'] = sorted(set(refs))
                 body['deleted'] = message.get('deleted') is True
                 key = body['channel_id'] + '/' + body['message_id']
                 revision = fingerprint(body)

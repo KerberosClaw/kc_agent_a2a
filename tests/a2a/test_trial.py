@@ -9,9 +9,27 @@ from pathlib import Path
 from unittest.mock import patch
 
 from a2a.codex_adapter import CodexAdapter
-from a2a.storage import BoundaryError, Store
-from a2a.coordinator import Coordinator
+from a2a.storage import BoundaryError, NativeRefusal, Store
+from a2a.coordinator import Coordinator, LIMITS
 from a2a.trial import run_trial, configuration
+
+
+class _RefusingAdapter:
+    """Refuses agent_a's opening prepare a fixed number of times, then behaves normally."""
+
+    def __init__(self,*args,refuse=1,seen=None,**kwargs):
+        self.audit=[];self.refuse=refuse;self.seen=seen if seen is not None else []
+
+    def call(self,request,timeout):
+        self.seen.append(request);rid=request['request_id']
+        if request['agent']=='agent_a' and request['purpose']=='prepare':
+            attempts=sum(1 for s in self.seen if s['agent']=='agent_a' and s['purpose']=='prepare')
+            if attempts<=self.refuse:raise NativeRefusal('blocked',category='reasoning_extraction')
+        if request['purpose']=='prepare':
+            return {'request_id':rid,'native_status':'success','has_topic':True,'own_summary':'topic'}
+        return {'request_id':rid,'native_status':'success','reply':'fixture','reply_to':request['reply_to'],
+                'move':'closure','wants_reply':False,
+                'digest_candidate':{'summary':'fixture','shared_message_ids':[rid]}}
 
 
 class TrialTests(unittest.TestCase):
@@ -82,6 +100,45 @@ class TrialTests(unittest.TestCase):
             (people/'link.md').symlink_to(root/'outside.md');(root/'outside.md').write_text('private')
             result=related_people('[[../outside]] [[link]] [[people/a|A]] [[a]] [[b#part]] [[c]] [[d]]',people)
             self.assertEqual([p.name for p in result],['a.md','b.md','c.md'])
+
+    def _refusal_run(self,tmp,refuse):
+        root=Path(tmp);data={'runtime':root,'content':root/'content'}
+        packets={a:{'manifest':[],'content':'persona '+a} for a in ('agent_a','agent_b')}
+        seen=[];exported=[]
+        factory=lambda *a,**k:_RefusingAdapter(*a,refuse=refuse,seen=seen,**k)
+        with patch('a2a.trial.preflight',return_value=packets),\
+             patch('a2a.trial.save_snapshot',side_effect=lambda p,s:exported.append(s) or {'backed_up':True}):
+            code=run_trial(data,'topic',adapter_factory=factory,sleep=lambda _:None)
+        report=json.loads((root/'runs'/exported[0]['run_id']/'report.json').read_text())
+        return code,seen,exported[0],report
+
+    def test_refused_call_is_resent_and_the_night_still_completes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code,seen,snapshot,report=self._refusal_run(tmp,1)
+            self.assertEqual(code,0)
+            self.assertEqual(snapshot['stop_reason'],'closure')
+            # one refused prepare, its resend, agent_b's prepare, then a single closing chat turn
+            self.assertEqual(len(seen),4)
+            self.assertEqual(snapshot['ledger']['agent_a'],{'prepare':1,'chat':1,'retry':1})
+            self.assertEqual(snapshot['ledger']['agent_b']['retry'],0)
+            self.assertEqual([r['category'] for r in report['refusals']],['reasoning_extraction'])
+            self.assertEqual(report['refusals'][0]['purpose'],'prepare')
+            # the resend carries a new attempt ID but the same persona and material
+            first,resend=seen[0],seen[1]
+            self.assertNotEqual(first['request_id'],resend['request_id'])
+            self.assertEqual({k:v for k,v in first.items() if k!='request_id'},
+                             {k:v for k,v in resend.items() if k!='request_id'})
+
+    def test_persistent_refusal_stops_after_the_retry_budget_and_is_recorded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code,seen,snapshot,report=self._refusal_run(tmp,99)
+            self.assertEqual(code,1)
+            self.assertEqual(snapshot['stop_reason'],'failed')
+            self.assertEqual(len(seen),1+LIMITS['retry'])
+            self.assertEqual(snapshot['ledger']['agent_a'],{'prepare':1,'chat':0,'retry':LIMITS['retry']})
+            self.assertEqual(len(report['refusals']),1+LIMITS['retry'])
+            self.assertIn('retry budget',report['error'])
+            self.assertEqual(snapshot['messages'],[])
 
     def test_long_calibration_stops_at_ten_each_and_retains_prior_run(self):
         with tempfile.TemporaryDirectory() as tmp:

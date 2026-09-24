@@ -9,7 +9,7 @@ from test_state import registry
 from discord_party.continuity import encode, fingerprint
 from discord_party.continuity_save import canonical
 from discord_party.native import Grant, write_private
-from discord_party.sharing import refresh, load_view
+from discord_party.sharing import COMMON_RECAP_POLICY, attach_common_recap, refresh, load_view
 from discord_party.state import NotReady
 
 
@@ -37,7 +37,7 @@ class SharingCase(unittest.IsolatedAsyncioTestCase):
                 if 'candidate' in payload:
                     return 'speak', encode({'persona_approved': True, 'approved_material_indices': [0], 'issues': []})
                 if self.material:
-                    return 'speak', encode({'materials': [{'source_ids': ['night/run/1'], 'kind': 'hypothetical', 'text': 'Mochi imagined a scene.'}]})
+                    return 'speak', encode({'materials': [{'source_ids': ['night/run/1'], 'kind': 'hypothetical', 'text': 'Agent A imagined a scene.'}]})
                 outer.assertEqual(payload['sources'], [])
                 return 'speak', encode({'persona': 'Synthetic natural narrative. ' * 60, 'materials': []})
         self.factory = Fake
@@ -56,6 +56,28 @@ class SharingCase(unittest.IsolatedAsyncioTestCase):
         await refresh(self.config, self.grant, self.sources, engine_factory=self.factory, now=101)
         self.assertEqual(len(self.calls), 3)  # unchanged inputs start no model
         self.assertTrue(all(not c['allow_web'] for c in self.calls))
+
+    def test_latest_common_recap_is_identical_and_replaces_selector_variant(self):
+        self.assertEqual(COMMON_RECAP_POLICY, 'latest_identical_candidate_v3')
+        sources = [
+            {'source_id': 'night-recap/old', 'origin': 'night_recap',
+             'occurred_at': '2026-09-11T03:00:00+08:00',
+             'body': {'started_at': '2026-09-11T03:00:00+08:00', 'summary': '舊回顧'}},
+            {'source_id': 'night-recap/new', 'origin': 'night_recap',
+             'occurred_at': '2026-09-12T03:00:00+08:00',
+             'body': {'started_at': '2026-09-12T03:00:00+08:00', 'summary': '共同內容'}},
+        ]
+        chosen = [{'source_ids': ['night-recap/new'], 'kind': 'said', 'text': 'persona-specific paraphrase'}]
+        result = attach_common_recap(chosen, sources)
+        self.assertEqual(result, [{'source_ids': ['night-recap/new'], 'kind': 'said',
+                                   'text': '夜聊共同回顧（2026-09-12T03:00:00+08:00）：共同內容'}])
+
+    def test_invalid_selector_material_does_not_block_auditing_the_common_recap(self):
+        sources = [{'source_id': 'night-recap/new', 'origin': 'night_recap',
+                    'occurred_at': '2026-09-12T03:00:00+08:00',
+                    'body': {'started_at': '2026-09-12T03:00:00+08:00', 'summary': '共同內容'}}]
+        invalid = [{'source_ids': ['missing', 'missing'], 'kind': 'joke', 'text': 'bad provenance'}]
+        self.assertEqual(attach_common_recap(invalid, sources)[0]['source_ids'], ['night-recap/new'])
 
     async def test_new_patch_triggers_refresh_preserves_old_version(self):
         one = await refresh(self.config, self.grant, self.sources, engine_factory=self.factory, now=100)
@@ -78,6 +100,20 @@ class SharingCase(unittest.IsolatedAsyncioTestCase):
         two = await refresh(self.config, self.grant, self.sources, engine_factory=Deny, now=101)
         self.assertEqual(two['status'], 'held_for_review')
         self.assertEqual(json.loads((self.root / 'sharing/agent_a/current.json').read_text())['version'], one['view_version'])
+
+    async def test_material_refresh_keeps_identical_previously_approved_persona(self):
+        await refresh(self.config, self.grant, self.sources, engine_factory=self.factory, now=100)
+        original = self.factory
+        class PersonaFalse(original):
+            async def decide(self, messages, remaining):
+                if 'candidate' in json.loads(messages[0]['content']):
+                    return 'speak', encode({'persona_approved': False, 'approved_material_indices': [0],
+                                            'issues': [{'field': 'persona', 'reason': 'privacy',
+                                                        'detail': 'nondeterministic repeat finding'}]})
+                return await super().decide(messages, remaining)
+        changed = [dict(self.sources[0], body={'author': 'agent_a', 'text': 'changed hypothetical'})]
+        two = await refresh(self.config, self.grant, changed, engine_factory=PersonaFalse, now=101)
+        self.assertEqual(two['status'], 'published')
 
     async def test_source_change_during_audit_discards_output(self):
         original = self.factory; root = self.root

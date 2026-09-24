@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .night_recap import build, validate
 from .storage import BoundaryError
 
 
@@ -24,9 +25,14 @@ def recent(content:Path,limit=7):
             refs=d.get('shared_message_ids');allowed={m['id'] for m in s['messages']}
             if not isinstance(refs,list) or any(x not in allowed for x in refs):raise BoundaryError('invalid digest provenance')
             parts.append(d)
-        if parts:output.append({'run_id':s['run_id'],'started_at':s.get('started_at'),'night_label':s.get('night_label'),
-                               'mode':s.get('mode','historical_calibration'),'stop_reason':s['stop_reason'],
-                               'digests':parts,'conversation_path':str(p.with_name('conversation.md'))})
+        if parts:
+            recap_path = p.with_name('recap.json')
+            recap = json.loads(recap_path.read_text()) if recap_path.exists() else build(s)
+            validate(recap, s)
+            output.append({'run_id':s['run_id'],'started_at':s.get('started_at'),'night_label':s.get('night_label'),
+                           'mode':s.get('mode','historical_calibration'),'stop_reason':s['stop_reason'],
+                           'common_recap':recap,'digests':parts,
+                           'conversation_path':str(p.with_name('conversation.md'))})
         if len(output)>=limit:break
     return list(reversed(output))
 

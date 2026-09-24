@@ -39,6 +39,22 @@ class GrantCase(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def test_background_grants_keep_models_in_approved_manifest(self):
+        from discord_party.sharing import CuratorGrant
+        from discord_party.shared_context import ContextGrant
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        self.manifest['native_models'] = {'agent_a': 'fixture-claude', 'agent_b': 'fixture-codex'}
+        write_private(self.root / 'grant/manifest.json', json.dumps(self.manifest))
+        for agent, bot in [('agent_a', '20'), ('agent_b', '30')]:
+            original = Grant(self.root / 'grant', agent, registry(bot))
+            with patch('discord_party.sharing.canonical', return_value={'version': 'fixture'}):
+                wrappers = [CuratorGrant(original, self.root / 'canonical-without-manifest'),
+                            ContextGrant(original, SimpleNamespace())]
+            for wrapper in wrappers:
+                engine = NativeEngine(wrapper, self.root / 'worker')
+                self.assertEqual(engine.model, self.manifest['native_models'][agent])
+
     def test_exact_approved_packet_and_agent_binding(self):
         g = Grant(self.root / 'grant', 'agent_a', registry())
         self.assertEqual(g.persona, 'Synthetic persona A')
@@ -165,6 +181,22 @@ class TraceCase(unittest.TestCase):
                 events[1]['item']['type'] = tool
                 with self.assertRaises(NotReady):
                     e.parse(events, 'ignored')
+
+    def test_codex_search_budget_ignores_non_query_bookkeeping(self):
+        e = self.engine('codex')
+        events = [{'type': 'thread.started', 'thread_id': 'a'}]
+        events += [{'type': 'item.completed', 'item': {'id': 'web-' + str(n), 'type': 'web_search',
+                   'action': {'type': 'search', 'queries': ['q']}}} for n in range(3)]
+        events += [{'type': 'item.completed', 'item': {'id': 'bookkeeping', 'type': 'web_search',
+                    'action': {'type': 'other'}}},
+                   {'type': 'item.completed', 'item': {'type': 'agent_message', 'text': '{}'}},
+                   {'type': 'turn.completed', 'usage': {}}]
+        e.parse(events, 'ignored')
+        self.assertEqual(e.web_calls, 3)
+        events.insert(-2, {'type': 'item.completed', 'item': {'id': 'web-4', 'type': 'web_search',
+                       'action': {'type': 'search', 'queries': ['q']}}})
+        with self.assertRaises(NotReady):
+            e.parse(events, 'ignored')
 
 
 @unittest.skipUnless(Path('/usr/bin/sandbox-exec').exists(), 'macOS OS guard')

@@ -52,3 +52,7 @@ python scripts/uninstall_a2a_notes.py
 ## 加人與變更範圍
 
 Discord 頻道存取與應用程式 registry 都必須更新。先停止本套 Party，建立新的明確核准受眾 manifest，取得分享舊歷史的同意，再套用已測試的成員狀態遷移。不要只手改其中一個 bot 設定，也不要沿用原本較小範圍的授權。`State.add_human` 與受眾擴充檢查是內部 API；完整的加入成員 CLI 尚待開發。契約見 [隱私](privacy.md)及[介面](interfaces.md)。
+
+## 生活資料與監控
+
+[共享脈絡](context.md)說明回填、等待檔案穩定、失敗退避、來源撤回與停用。若已啟用[watchdog](watchdog.md)，規劃維護前暫停同一套安裝的 LaunchAgent，避免把預期停止當故障；直接 checkout 安裝與版本化安裝的路徑都須保留。升級時不重新初始化帳本，也不刪除未知送達紀錄。

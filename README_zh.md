@@ -10,6 +10,12 @@
 
 **目前是技術預覽版。** 離線試跑不用帳號；真實運作需要 macOS、已登入的 Claude Code 與 Codex CLI、獨立的私人加密內容庫，Party 另需兩隻 Discord bot。這是單機實驗性整合，不是託管服務，也不是 Google A2A 互通協議的實作。
 
+## v0.2 這次補了什麼
+
+Party 現在能按需用唯讀 MCP 查核准的生活脈絡；共同日記整理一次，各自 journal 保留自己的相處史。夜聊有共同摘要但不混掉兩隻觀點，回話短一點，沒新資料就別繼續換句話說。另加選用的 macOS 故障通知，通知器由你自己接。養兩隻能聊天的，結果熊還得幫他們處理「你剛剛講過了」。
+
+這些資料來源需要主動啟用，見[脈絡設定與界線](docs/context.md)、[故障通知](docs/watchdog.md)與[版本驗證](docs/verification-v0.2.md)。外部公開 Poke 專案沒有隨這版一起更新。
+
 ## 這一家是怎麼長出來的
 
 **[kc_agent_persona_pack](https://github.com/KerberosClaw/kc_agent_persona_pack) 是最初的母專案。** 它建立「基線 → 全部現行 patch → 近期 journal」的載入與存檔方式。本專案在這個主人格外圍加上溝通與經歷讀回，不附帶任何人的真實人格，也不取代 persona pack。

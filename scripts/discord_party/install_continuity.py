@@ -22,6 +22,7 @@ import uuid
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src'))
 from a2a.storage import atomic_write
 from discord_party.native import Grant
+from discord_party.installation import watchdog_label
 from discord_party.sharing import load_view
 from discord_party.state import Registry, NotReady
 
@@ -36,6 +37,26 @@ def command(argv):
 def pointer(path, target):
     temp = path.with_name('.' + path.name + '.' + uuid.uuid4().hex)
     temp.symlink_to(target); temp.replace(path)
+
+
+def suspend_watchdog(runtime):
+    """Pause the periodic checker so an intentional deploy stop is not an incident."""
+    label = watchdog_label(runtime)
+    plist = Path.home() / 'Library/LaunchAgents' / (label + '.plist')
+    if not plist.is_file():
+        return None
+    domain = 'gui/' + str(os.getuid())
+    loaded = subprocess.run(['/bin/launchctl', 'print', domain + '/' + label],
+                            capture_output=True, text=True).returncode == 0
+    if loaded:
+        command(['/bin/launchctl', 'bootout', domain + '/' + label])
+        return plist
+    return None
+
+
+def resume_watchdog(plist):
+    if plist:
+        command(['/bin/launchctl', 'bootstrap', 'gui/' + str(os.getuid()), plist])
 
 
 def install(config_path, review, *, source=None):
@@ -89,7 +110,12 @@ def install(config_path, review, *, source=None):
               'review': str(review), 'backup': str(backup), 'before': before, 'complete': False}
     atomic_write(backup / 'deployment.json', json.dumps(record, indent=2))
     manager = old_release / 'scripts/discord_party/manage.py'
-    command([python, manager, 'stop', '--runtime', runtime])
+    watchdog_plist = suspend_watchdog(runtime)
+    try:
+        command([python, manager, 'stop', '--runtime', runtime])
+    except BaseException:
+        resume_watchdog(watchdog_plist)
+        raise
     try:
         pointer(runtime / 'current', release)
         pointer(runtime / 'review/current', review)
@@ -104,6 +130,7 @@ def install(config_path, review, *, source=None):
                      [runtime / 'current/.venv/bin/python', runtime / 'current/scripts/discord_party/continuity.py', '--config', config_path]) + ' "$@"\n')
         binary.chmod(0o700)
         command([release / '.venv/bin/python', release / 'scripts/discord_party/manage.py', 'start', '--runtime', runtime])
+        resume_watchdog(watchdog_plist)
         record['complete'] = True
         atomic_write(runtime / 'evidence/continuity_deployment.json', json.dumps(record, indent=2))
         return record
@@ -117,6 +144,7 @@ def install(config_path, review, *, source=None):
             atomic_write(hook, (backup / 'digest-hook.py').read_text())
             atomic_write(hook_config, (backup / 'digest-hook-config.json').read_text())
             command([python, manager, 'start', '--runtime', runtime])
+            resume_watchdog(watchdog_plist)
         raise
 
 

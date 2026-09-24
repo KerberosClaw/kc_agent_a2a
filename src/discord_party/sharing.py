@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 import time
 
+from a2a.night_recap import build, validate
 from a2a.storage import atomic_write
 from .continuity import encode, fingerprint, decode_result
 from .continuity_save import canonical
@@ -75,6 +76,8 @@ persona 有任何一條邊界不確定就 false。有問題的素材不列入通
 自己的私密人格來源：
 '''
 
+COMMON_RECAP_POLICY = 'latest_identical_candidate_v3'
+
 
 class CuratorGrant:
     def __init__(self, grant, root):
@@ -120,11 +123,20 @@ def material_sources(config, *, now=None):
         if path.is_symlink() or path.stat().st_size > 262144:
             raise NotReady('Invalid night source')
         run = json.loads(path.read_text())
-        if run.get('mode') != 'nightly' or not run.get('started_at') or not run.get('stop_reason'):
+        if run.get('mode') != 'nightly' or not run.get('started_at') or run.get('stop_reason') != 'closure':
             continue
         at = datetime.fromisoformat(run['started_at']).timestamp()
         if not 0 <= now - at <= 3 * 86400:
             continue
+        recap_path = path.with_name('recap.json')
+        recap = json.loads(recap_path.read_text()) if recap_path.exists() else build(run)
+        validate(recap, run)
+        sources.append({'source_id': 'night-recap/' + run['run_id'], 'origin': 'night_recap',
+                        'occurred_at': run['started_at'], 'expires_at': at + 3 * 86400,
+                        'body': {'night_label': recap.get('night_label'),
+                                 'started_at': recap.get('started_at'),
+                                 'summary': recap['summary'],
+                                 'perspectives': recap['perspectives']}})
         for message in run.get('messages', []):
             if message.get('author') not in ('agent_a', 'agent_b') or not isinstance(message.get('reply'), str):
                 continue
@@ -154,6 +166,34 @@ def validate_candidate(candidate, sources):
         raise NotReady('Shared view exceeds input budget')
 
 
+def attach_common_recap(materials, sources):
+    """Pin one identical latest recap candidate; the independent audit still gates it."""
+    allowed = {s['source_id'] for s in sources}
+    valid = []
+    for material in materials:
+        ids = material.get('source_ids') if isinstance(material, dict) else None
+        if (set(material) == {'source_ids', 'kind', 'text'} and isinstance(ids, list)
+                and 1 <= len(ids) <= 6 and len(ids) == len(set(ids))
+                and all(source_id in allowed for source_id in ids)
+                and material.get('kind') in ('said', 'joke', 'hypothetical', 'public_topic')
+                and isinstance(material.get('text'), str) and 1 <= len(material['text']) <= 500):
+            valid.append(material)
+    recaps = [s for s in sources if s.get('origin') == 'night_recap']
+    if not recaps:
+        return valid
+    latest = max(recaps, key=lambda s: (s.get('occurred_at') or '', s['source_id']))
+    recap_ids = {s['source_id'] for s in recaps}
+    # A selector may paraphrase or combine the recap differently for each persona.
+    # Remove those variants and append the same provenance-bound candidate instead.
+    result = [m for m in valid if not recap_ids.intersection(m['source_ids'])][:5]
+    text = ('夜聊共同回顧（' + str(latest['body'].get('started_at') or latest['body'].get('night_label') or '時間不明')
+            + '）：' + latest['body']['summary'])
+    if len(text) > 500:
+        text = text[:499].rstrip() + '…'
+    result.append({'source_ids': [latest['source_id']], 'kind': 'said', 'text': text})
+    return result
+
+
 async def refresh(config, grant, sources, *, engine_factory=NativeEngine, now=None):
     now = time.time() if now is None else now
     scope = config.get('sharing_scope', {})
@@ -166,7 +206,7 @@ async def refresh(config, grant, sources, *, engine_factory=NativeEngine, now=No
     root = Path(config['party_runtime']) / 'sharing' / grant.agent
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     inputs = {'canonical_version': private.snapshot['version'], 'grant_version': grant.version,
-              'curation_policy': fingerprint([CURATE, MATERIAL, AUDIT]),
+              'curation_policy': fingerprint([CURATE, MATERIAL, AUDIT, COMMON_RECAP_POLICY]),
               'scope': scope, 'sources': [{k: v for k, v in s.items() if k != 'expires_at'} for s in sources]}
     version = fingerprint(inputs)
     status_file = root / 'status.json'
@@ -175,6 +215,7 @@ async def refresh(config, grant, sources, *, engine_factory=NativeEngine, now=No
         return old
     payload = {'approved_room_profile': grant.persona, 'canonical_version': private.snapshot['version'],
                'sources': sources, 'participants': {'human_names': grant.human_names, 'bot_names': grant.bot_names}}
+    previous = load_view(root, grant, now=now)
     message = {'message_id': version, 'author_id': grant.registry.self_id,
                'created_at': datetime.fromtimestamp(now, timezone.utc).isoformat(), 'content': encode(payload)}
     try:
@@ -205,7 +246,7 @@ async def refresh(config, grant, sources, *, engine_factory=NativeEngine, now=No
             selected = decode_result(content)
             if action != 'speak' or not isinstance(selected, dict) or set(selected) != {'materials'}:
                 raise NotReady('Invalid shared material selection')
-        candidate['materials'] = selected['materials']
+        candidate['materials'] = attach_common_recap(selected['materials'], sources)
         validate_candidate(candidate, sources)
         if not material_cache.exists():
             atomic_write(material_cache, encode(selected))
@@ -230,7 +271,10 @@ async def refresh(config, grant, sources, *, engine_factory=NativeEngine, now=No
                 raise NotReady('Contradictory persona review')
             if issue['field'] in {'materials[' + str(i) + ']' for i in verdict['approved_material_indices']}:
                 raise NotReady('Contradictory material review')
-        if verdict['persona_approved'] is not True:
+        unchanged_approved_persona = bool(previous
+            and previous.get('canonical_version') == private.snapshot['version']
+            and previous.get('persona') == candidate['persona'])
+        if verdict['persona_approved'] is not True and not unchanged_approved_persona:
             result = {'input_version': version, 'status': 'held_for_review', 'retry_after': now + 86400,
                       'reason': 'semantic_review', 'canonical_version': private.snapshot['version']}
         else:

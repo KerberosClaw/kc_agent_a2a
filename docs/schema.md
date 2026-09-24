@@ -119,6 +119,12 @@ CREATE TABLE attempts (
 CREATE TABLE config (registry TEXT NOT NULL, version INTEGER NOT NULL);
 ```
 
+### context_origins
+
+```sql
+CREATE TABLE context_origins (request_id TEXT PRIMARY KEY REFERENCES outbox(request_id), source_refs TEXT NOT NULL);
+```
+
 ### events
 
 ```sql

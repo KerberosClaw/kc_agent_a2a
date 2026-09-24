@@ -1,10 +1,10 @@
 # 介面與契約
 
-> **English summary:** The preview exposes CLI, Python, hook, and file contracts rather than an HTTP API. Grants bind exact content and audiences; delivery, readback, and explicit canonical saves validate their own authority and evidence.
+> **English summary:** The preview exposes CLI, Python, hook, file contracts, and an optional ephemeral loopback MCP interface. Grants bind exact content and audiences; delivery, readback, and explicit canonical saves validate their own authority and evidence.
 
 [文件索引](index.md) · [資料模型](data-model.md) · [維運](operations.md)
 
-本預覽版提供 Python／CLI、原生 hook 與檔案契約，沒有網路 API，不需要安裝 REST endpoint 或 OpenAPI 文件。
+本預覽版提供 Python／CLI、原生 hook 與檔案契約。選用 `party_life` 提供每回合 loopback MCP HTTP 介面，沒有公開 REST endpoint；MCP schema 在 [life_tools.py](../src/discord_party/life_tools.py)。
 
 | 入口 | 輸入 | 輸出／授權 |
 | --- | --- | --- |
@@ -15,6 +15,9 @@
 | `party.py` | Registry JSON、獨立狀態目錄、受限 token 檔與核准授權 | 本機狀態或真實 Discord client |
 | `manage.py` | `start`、`stop`、`status` 與明確 runtime | 所管理的程序紀錄；start 不等於 READY |
 | `continuity.py` | 設定、`tick`、`status`、`save-*` 操作 | 摘要工作、帳本狀態與明確存檔生命週期 |
+| `party_life.search/read` | 短 query、kind、分頁 cursor 或核准 ID | 本回合受眾綁定的核准投影；最多八次、75 秒，詳見[共享脈絡](context.md) |
+| `shared_context.py` | continuity 設定、`tick/status` | 生活／相處資料整理狀態；tick 可能呼叫模型 |
+| `watchdog.py` | runtime、外部 notifier、`install/tick` | 程序與 READY 檢查；[通知契約](watchdog.md)使用 JSON stdin／確認回執 |
 
 旗標以 CLI help 為準。適合的指令會輸出 JSON，拒絕操作時回傳非零 exit code。部分 runtime 狀態報告含私人內容，即使錯誤訊息已去敏，整份輸出仍應視為私人資料。
 
@@ -26,7 +29,7 @@ Manifest 改變會使執行中的授權失效。擴充受眾需要明確的歷�
 
 ## 原生決定與 hook
 
-Party 依 adapter 的結構化輸出 schema 回傳 `request_id`、`action`（`speak` 或 `wait`）與 `content`。送出前檢查請求身分、內容限制與允許的工具軌跡。輸入帶有作者／訊息 ID 及時間，模型不可捏造來源引用。完整 schema 與允許清單在 [native.py](../src/discord_party/native.py) 及測試中。
+Party 依 adapter 的結構化輸出 schema 回傳 `request_id`、`action`（`speak` 或 `wait`）、`content`，一般聊天另有 `contribution` 分類。送出前檢查請求身分、內容限制與允許的工具軌跡。輸入帶有作者／訊息 ID 及時間，模型不可捏造來源引用。完整 schema 與允許清單在 [native.py](../src/discord_party/native.py) 及測試中。
 
 Hook 要求預期的 session、根目錄、事件、輸入 ID 與原生逐字稿；排除 subagent 事件及根目錄不符的輸入。紙條寄送授權只涵蓋當前真人回合。`receive` 和 `ack` 登記候選處理，對帳會核對真實原生回合，才建立最終回執並移除本文。Party 經歷摘要即使由 hook 印出，也不能直接算已讀，還需要原生逐字稿對帳。較早的夜聊 digest hook 則從成功的 Stop 事件與 assistant 回覆記錄完成，沒有使用同一套逐字稿回執帳本。
 

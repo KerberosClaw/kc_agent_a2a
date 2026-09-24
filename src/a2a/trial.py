@@ -14,11 +14,13 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .codex_adapter import CodexAdapter
-from .coordinator import Coordinator
+from .coordinator import Coordinator, LIMITS
 from .notes import AGENTS
 from .persona import snapshot
 from .social import save_snapshot, verify_repository
-from .storage import BoundaryError, Store, atomic_write, encode
+from .storage import BoundaryError, NativeRefusal, Store, atomic_write, encode
+
+RETRY_BACKOFF_SECONDS=30
 
 CALIBRATION_TOPIC='你們可以從各自拿到的生活與語料記錄挑想聊的事，聊聊主人，互相接話；不用刻意完成議程。'
 
@@ -76,7 +78,29 @@ def run_trial(data,topic, *, adapter_factory=CodexAdapter, sleep=time.sleep, cal
             cancelled=lambda:stop_requested(store,run) or time.monotonic()>=deadline or bool(external_cancelled and external_cancelled())
             adapter=adapter_factory(run_root/'native',synthetic=False,cancelled=cancelled,authorized_material=calibration or nightly)
             reason='limit';error=None;attempt=None
-            shared=[];prepared={}
+            shared=[];prepared={};refusals=[]
+
+            def dispatch(agent,kind,build):
+                """One native call. A server-side refusal is the only failure worth resending, so the
+                identical request is sent again under a fresh attempt ID until the retry budget ends."""
+                nonlocal attempt
+                attempt=coordinator.reserve(run,agent,kind,day);resent=0
+                while True:
+                    coordinator.dispatched(attempt)
+                    try:return adapter.call(build(attempt),timeout=180)
+                    except NativeRefusal as refused:
+                        coordinator.fail(attempt,confirmed=True)
+                        refusals.append({'agent':agent,'purpose':kind,'request_id':attempt,
+                                         'category':refused.category,'resend':resent})
+                        if cancelled():raise BoundaryError('owner stop or run deadline')
+                        try:attempt=coordinator.reserve(run,agent,'retry',day,attempt)
+                        except BoundaryError as spent:
+                            raise BoundaryError('refused '+str(resent+1)+' time(s); retry budget of '
+                                                +str(LIMITS['retry'])+' is spent: '+str(refused)) from spent
+                        resent+=1
+                        for _ in range(RETRY_BACKOFF_SECONDS*2):  # short steps stay interruptible
+                            if cancelled():break
+                            sleep(0.5)
             try:
                 materials={}
                 if calibration or nightly:
@@ -88,10 +112,9 @@ def run_trial(data,topic, *, adapter_factory=CodexAdapter, sleep=time.sleep, cal
                     atomic_write(run_root/'material-packets.json',encode(materials))
                 for agent in ('agent_a','agent_b'):
                     if cancelled():raise BoundaryError('owner stop or run deadline')
-                    attempt=coordinator.reserve(run,agent,'prepare',day);coordinator.dispatched(attempt)
-                    request={'request_id':attempt,'agent':agent,'purpose':'prepare','persona':packets[agent]['content'],
-                             'own_material':materials.get(agent,{'topic':topic,'instruction':'只整理你對指定話題的想法；不取私聊，不轉述主人的私人資料。'})}
-                    result=adapter.call(request,timeout=180)
+                    result=dispatch(agent,'prepare',lambda rid,agent=agent:{
+                        'request_id':rid,'agent':agent,'purpose':'prepare','persona':packets[agent]['content'],
+                        'own_material':materials.get(agent,{'topic':topic,'instruction':'只整理你對指定話題的想法；不取私聊，不轉述主人的私人資料。'})})
                     if not coordinator.save_result(attempt,result):raise BoundaryError('stopped before acceptance')
                     coordinator.accept(attempt);prepared[agent]=result['has_topic'];attempt=None
                 opener='agent_a' if prepared['agent_a'] else 'agent_b'
@@ -104,12 +127,11 @@ def run_trial(data,topic, *, adapter_factory=CodexAdapter, sleep=time.sleep, cal
                             if cancelled():break
                             sleep(0.5)
                     if cancelled():raise BoundaryError('owner stop or run deadline')
-                    attempt=coordinator.reserve(run,agent,'chat',day);coordinator.dispatched(attempt)
-                    request={'request_id':attempt,'agent':agent,'purpose':'chat','persona':packets[agent]['content'],
-                             'own_material':materials.get(agent,{'topic':topic}),'shared_messages':shared,
-                             'reply_to':shared[-1]['id'] if shared else None,'close':index==19,
-                             'remaining_chat_slots':10-index//2,'chat_limit_per_agent':10}
-                    result=adapter.call(request,timeout=180)
+                    result=dispatch(agent,'chat',lambda rid,agent=agent,index=index:{
+                        'request_id':rid,'agent':agent,'purpose':'chat','persona':packets[agent]['content'],
+                        'own_material':materials.get(agent,{'topic':topic}),'shared_messages':shared,
+                        'reply_to':shared[-1]['id'] if shared else None,'close':index==19,
+                        'remaining_chat_slots':10-index//2,'chat_limit_per_agent':10})
                     if not coordinator.save_result(attempt,result):raise BoundaryError('stopped before acceptance')
                     coordinator.accept(attempt)
                     shared.append({'id':attempt,'author':agent,'reply':result['reply']});attempt=None
@@ -128,7 +150,7 @@ def run_trial(data,topic, *, adapter_factory=CodexAdapter, sleep=time.sleep, cal
             report={'run_id':run,'status':reason,'error':error,'messages':len(shared),
                     'calibration':calibration,'display_policy':'explicit_calibration_only',
                     'ledger':final['ledger'],'native_audit':adapter.audit,'persona_sources_read_only':True,
-                    'life_wiki_writes':False,'automatic_schedule':nightly}
+                    'life_wiki_writes':False,'automatic_schedule':nightly,'refusals':refusals}
             try:report['backup']=save_snapshot(data['content'],final)
             except Exception as exc:report['backup']={'backed_up':False,'error':type(exc).__name__+': '+str(exc)}
             atomic_write(run_root/'report.json',encode(report)+'\n')

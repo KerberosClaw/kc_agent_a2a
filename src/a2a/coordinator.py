@@ -7,7 +7,7 @@ from pathlib import Path
 from .notes import AGENTS
 from .storage import BoundaryError, Store, atomic_write, encode
 
-LIMITS = {"chat": 10, "prepare": 1, "retry": 2}
+LIMITS = {"chat": 10, "prepare": 1, "retry": 3}
 MOVES = {"new_experience", "new_view", "question", "affect", "closure", "noop"}
 
 
@@ -39,8 +39,10 @@ class Coordinator:
                 raise BoundaryError("attempt day must match its run")
             if kind == "retry":
                 old = db.execute("SELECT * FROM attempts WHERE id=?", (parent,)).fetchone()
-                if not old or old["run"] != run_id or old["agent"] != agent or old["kind"] == "retry" or old["status"] != "failed":
-                    raise BoundaryError("only a confirmed failed original attempt may retry")
+                # A retry may itself be retried so a repeated refusal can be resent, but the per-run
+                # and per-day retry budget still caps how many resends a single agent ever gets.
+                if not old or old["run"] != run_id or old["agent"] != agent or old["status"] != "failed":
+                    raise BoundaryError("only a confirmed failed attempt may retry")
                 if db.execute("SELECT 1 FROM attempts WHERE parent=?", (parent,)).fetchone():
                     raise BoundaryError("request already retried")
             elif parent is not None:
@@ -69,9 +71,14 @@ class Coordinator:
                 raise BoundaryError("attempt is not in flight")
 
     def purpose(self, row):
-        if row["kind"] != "retry":
-            return row["kind"]
-        return self.store.db.execute("SELECT kind FROM attempts WHERE id=?", (row["parent"],)).fetchone()[0]
+        # Retries chain, so walk to the original attempt instead of stopping at the first parent.
+        kind, parent = row["kind"], row["parent"]
+        while kind == "retry":
+            found = self.store.db.execute("SELECT kind,parent FROM attempts WHERE id=?", (parent,)).fetchone()
+            if not found:
+                raise BoundaryError("retry has no original attempt")
+            kind, parent = found["kind"], found["parent"]
+        return kind
 
     def save_result(self, attempt, result):
         row = self.store.db.execute("SELECT * FROM attempts WHERE id=?", (attempt,)).fetchone()
