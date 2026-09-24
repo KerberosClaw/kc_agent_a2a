@@ -210,7 +210,13 @@ class TraceToolsCase(unittest.TestCase):
                 engine = NativeEngine(Grant(root / 'grant', agent, registry(bot)), root / agent)
                 engine.life_server = type('Server', (), {'url': 'http://127.0.0.1:54321/mcp'})()
                 call = root / agent / 'call'; call.mkdir()
-                cmd = engine.command(call, 'id')
+                # This test checks command construction, not installed CLI authentication.
+                # Real OS denial is exercised separately by IsolationCase.
+                real_is_file = Path.is_file
+                with patch('discord_party.native.shutil.which', return_value='/usr/bin/true'), \
+                        patch.object(Path, 'is_file', autospec=True,
+                            side_effect=lambda p: str(p) == '/usr/bin/sandbox-exec' or real_is_file(p)):
+                    cmd = engine.command(call, 'id')
                 self.assertEqual(cmd[0], '/usr/bin/sandbox-exec')
                 self.assertNotIn('Bash', cmd)
                 if agent == 'agent_a':
