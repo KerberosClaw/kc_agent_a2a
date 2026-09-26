@@ -29,7 +29,9 @@ Manifest 改變會使執行中的授權失效。擴充受眾需要明確的歷�
 
 ## 原生決定與 hook
 
-Party 依 adapter 的結構化輸出 schema 回傳 `request_id`、`action`（`speak` 或 `wait`）、`content`，一般聊天另有 `contribution` 分類。送出前檢查請求身分、內容限制與允許的工具軌跡。輸入帶有作者／訊息 ID 及時間，模型不可捏造來源引用。完整 schema 與允許清單在 [native.py](../src/discord_party/native.py) 及測試中。
+Party 依 adapter 的結構化輸出 schema 回傳 `request_id`、`action`（`speak`、`pass` 或 `close`）、`content`，一般聊天另有 `contribution` 分類。送出前檢查請求身分、內容限制與允許的工具軌跡。輸入帶有作者／訊息 ID 及時間，模型不可捏造來源引用。完整 schema 與允許清單在 [native.py](../src/discord_party/native.py) 及測試中。
+
+`speak` 要有非空內容；`pass` 必須空內容，維持 listening；`close` 可無內容直接結束自己的本輪參與，也可帶收尾文字，確認送達後再標記 closed。它不是停止整個服務或關閉另一隻 bot；新的合格真人訊息可恢復 listening，暫停、授權與額度檢查仍然適用。狀態處理見 [state.py](../src/discord_party/state.py)。
 
 Hook 要求預期的 session、根目錄、事件、輸入 ID 與原生逐字稿；排除 subagent 事件及根目錄不符的輸入。紙條寄送授權只涵蓋當前真人回合。`receive` 和 `ack` 登記候選處理，對帳會核對真實原生回合，才建立最終回執並移除本文。Party 經歷摘要即使由 hook 印出，也不能直接算已讀，還需要原生逐字稿對帳。較早的夜聊 digest hook 則從成功的 Stop 事件與 assistant 回覆記錄完成，沒有使用同一套逐字稿回執帳本。
 
@@ -45,3 +47,27 @@ continuity.py --config CONFIG save-abort --save-id SAVE
 ```
 
 `save-begin` 凍結批次引用與正式人格 Git base。人格自行評估這些經歷並寫出有理由的檔案，helper 不會自動編輯人格。`save-commit` 只接受支援的 patch／journal 路徑，檢查 staged 內容、base／lock 與加密後，記錄不含私人細節的 commit 及備份狀態。Resume 透過 manifest 對帳先前的 commit；abort 保留檔案，批次維持待評估。撰寫整合前先讀 [continuity_save.py](../src/discord_party/continuity_save.py)。
+
+## 生活查詢狀態
+
+| `status` | 可對使用者表達的意義 |
+| --- | --- |
+| `found` | 核准投影有符合資料；還須檢查 `has_more` |
+| `not_available` | 本次查詢在可分享範圍內沒有可用資料，不等於私人資料庫沒有 |
+| `ambiguous` | 名稱／別名對到多個對象，應先釐清 |
+| `limited` | 次數或有效期限制已到，結果不完整 |
+| `unavailable` | 查詢不可用，例如授權或來源變動；不能當成查無資料 |
+| `invalid_request` | 參數或 cursor 不符合契約，須修正請求 |
+
+回傳欄位依方法而異，不能把失敗狀態降級成空清單。來源：[life_tools.py](../src/discord_party/life_tools.py)；用法：[特定事件與近期瀏覽](context.md#查特定事件與瀏覽近期互動)。
+
+## 原生 CLI 相容性
+
+以下描述 `v0.2.0-alpha.1` 程式 revision `d1e9b30` 的 adapter 設計，並非對未來 CLI 版本的相容承諾。模型名稱、登入方式及事件格式升級後，都須在隔離環境重新驗收；不要只依旗標名稱推定能力。
+
+- Claude 有 Life MCP 時使用 `--restricted`、`--strict-mcp-config` 和明確工具清單，維持原本 OS guard；未掛 MCP 時使用 `--safe-mode`。這個選擇處理 safe-mode 抑制顯式 MCP，以及 bare 模式影響訂閱登入的相容問題；不能把拿掉隔離或改成 bare 當通用修法。
+- Claude 的 init 必須對到預期 session、唯一且已連線的 MCP server，以及必要的兩個 MCP 工具；實際軌跡仍不得出現額外工具。只看到 command 帶有 MCP 設定不算成功。
+- Codex 的同一個 `web_search` item 可有 started／updated／completed 事件，依 item ID 去重；`action.type=other` 的 bookkeeping 不算額外查詢。其他未核准工具仍拒絕。
+- 三次網頁查詢上限在收到原生事件後驗證，超限拒收結果；**不是保證供應者不會執行第四次查詢**。不要把事後驗證說成供應者端預算控制。
+
+程式與離線 fixture：[native.py](../src/discord_party/native.py)、[native 測試](../tests/discord_party/test_native.py)、[MCP 能力與 command 測試](../tests/discord_party/test_life_tools.py)。這些測試不證明真實帳號登入或 live CLI 工具可用。

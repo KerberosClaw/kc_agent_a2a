@@ -79,7 +79,7 @@ met_via: 同學
 3. 填入實際的擁有者、房間與完整真人 ID 清單、來源絕對路徑；受眾須與兩份 registry 完全相符。`approved_by` 必須是 bot 擁有者；目前一份共同政策要求兩隻由同一位操作者核准。
 4. 若只需人物／生活圈查詢，刪除 `shared_context` 區塊。若啟用日記整理，該區塊的 `journal_roots` 填人格**根目錄**（不是 journal 子目錄），必須與 `continuity-config.json` 的 `interactive_roots` 一致；兩個 bot ID 也須一致。`root` 必須是 `<party_runtime>/shared-context`，`backfill_count` 固定為 5。
 5. 在 `continuity-config.json` 增加 `life_context_policy`，指向這份政策絕對路徑。審閱資料與分享範圍後，把政策 `status` 改成 `approved`，填入實際 `approved_at`；不是每寫一篇日記就再批准一次。
-6. 執行下面的整理指令。第一次通常只回報 pending；滿 60 秒後再執行，才會呼叫原生模型。每篇為整理與審查兩次獨立模型工作，會消耗額度。日常 worker 每輪最多三篇，手動回填可用 `--max-documents 15`。
+6. 執行下面的整理指令。第一次通常只回報 pending；滿 60 秒後再執行，才會呼叫原生模型。每篇合格來源先呼叫一次整理；有候選記錄才另呼叫一次獨立審查，空候選不做第二次。失敗重試另計，詳見[模型呼叫盤點](model-calls.md)。日常 worker 每輪最多三篇，手動回填可用 `--max-documents 15`。
 
 ```bash
 python scripts/discord_party/shared_context.py \
@@ -122,3 +122,37 @@ Party 經歷摘要與原始日記分開存；正式人格仍在明確存檔時�
 停用時先停止本套 worker／Party，移除 `continuity-config.json` 的 `life_context_policy`，並把 `party/config/life-context.json` 搬出管理器使用的檔名，再啟動。保留來源、帳本與舊版本供對帳；刪投影不會撤回已送到 Discord 的訊息。
 
 實作與回歸入口：[life_context.py](../src/discord_party/life_context.py)、[life_tools.py](../src/discord_party/life_tools.py)、[shared_context.py](../src/discord_party/shared_context.py)、[共享脈絡測試](../tests/discord_party/test_shared_context.py)、[MCP 測試](../tests/discord_party/test_life_tools.py)。
+
+## 讓模型看到這一題需要的脈絡
+
+[prepare_chat](../src/discord_party/dialogue.py)建立本次輸入投影，不改已保存的房間歷史。以最後一則真人訊息的時間換算 Asia/Taipei，模型或另一隻 bot 的發言不能改掉這個時間基準：
+
+| 問法（合成例句） | 已實作的資料選擇 |
+| --- | --- |
+| 「昨晚夜聊聊了什麼？」 | 真人訊息日期的前一天 18:00 至當天 12:00，結束時間不包含在內 |
+| 「今天凌晨聊了什麼？」 | 當天 00:00 至 12:00，結束時間不包含在內 |
+| 指定日期的夜聊／凌晨回顧 | 依指定日期套用上述晚間／凌晨窗口 |
+| 「最近的夜聊內容？」 | 合格來源中時間最新的一場 |
+
+只從目前核准、未過期的分享素材選擇 `origin=night/night_recap`，並核對每筆 host 提供的 `occurred_at`，排除晚於真人訊息的來源。夜聊回顧會移除本次輸入中的舊房間摘錄、Party 經歷及生活資料，保留當前真人回合和選中的夜聊素材；找不到時回報沒有可用回顧，不能改用別晚或白天的 Party 故事。
+
+明確的新住家周邊搜尋，例如合成問句「幫我找我家附近的圖書館」，會移除本次輸入的舊房間摘錄／經歷並從當前真人回合開始，避免舊推薦被當成新搜尋答案。一般聊天與依賴前文的追問保留脈絡。這是有限的詞句規則，不是通用語意路由器，也不保證所有換話題都被識別。回歸見[dialogue 測試](../tests/discord_party/test_dialogue.py)。
+
+## 查特定事件與瀏覽近期互動
+
+`party_life.search` 的一般關鍵詞須同時命中，另有姓名／別名比對。把整段「最近和我發生什麼有趣互動」塞進 query，可能只是條件太窄。具體問題用短姓名或關鍵詞；泛問近期相處可用 `query=""`、`kind="interaction"` 依日期瀏覽，再讀結果 ID。這是本工具的契約，不能套用到所有搜尋服務。
+
+`has_more=true` 表示尚未讀完，應沿同一 query、kind、page_size 的 `next_cursor` 翻頁。一次零命中或只有第一頁，都不足以宣稱沒有相關資料。`ambiguous` 需釐清對象，不能任選一人；預算用完要說明資料不完整。完整[狀態語意](interfaces.md#生活查詢狀態)與[分頁／權限測試](../tests/discord_party/test_life_tools.py)可用於整合驗收。
+
+## 沒有新資訊時安靜
+
+一般聊天決定帶 `contribution`，分類與發言來自**同一個模型結果**，沒有額外判官呼叫：
+
+| 分類 | 用途與程式處理 |
+| --- | --- |
+| `answer` | 回答當前問題；夜聊回顧中，自己已回答過則再答會被轉為 `pass` |
+| `new` | 新資訊或有內容的新互動，仍經一般送出檢查 |
+| `correction` | 更正，仍經一般送出檢查 |
+| `none` | 轉為無內容的 `pass`；原本已是無內容 `close` 時保留關閉 |
+
+這能抑制空接力，不能證明模型分類正確或所有重述都被消除。判斷後 `pass` 仍已消耗一次模型呼叫；詳見[呼叫盤點](model-calls.md)。實作：[settle_contribution](../src/discord_party/dialogue.py)。

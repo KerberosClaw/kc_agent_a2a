@@ -49,7 +49,7 @@ python scripts/install_a2a_trial.py --config "$HOME/agent-a2a-preview/runtime/co
 "$HOME/.local/bin/agent-a2a" status
 ```
 
-校準是使用選定人格／素材的**真實模型執行**，與離線示範不同。手動校準使用 Codex；排程的混合夜聊使用 Claude 與 Codex。Claude 預設模型為 `sonnet`，可用 `A2A_CLAUDE_MODEL` 覆蓋。Codex 沿用 CLI 預設，除非設定 `A2A_CODEX_MODEL`。模型環境變數須放在實際啟動環境，只設在無關的 SSH shell 不會生效。
+校準是使用選定人格／素材的**真實模型執行**，與離線示範不同。手動校準使用 Codex；排程的混合夜聊使用 Claude 與 Codex。混合夜聊的 Claude 預設模型為 `sonnet`，可用 `A2A_CLAUDE_MODEL` 覆蓋；Codex 未設定 `A2A_CODEX_MODEL` 時由 CLI 選擇，兩者 effort 都傳入 `medium`。手動校準的預設 `CodexAdapter` 不讀這兩個環境變數，也不傳 model／effort 覆寫。Party 與背景整理另有設定來源，見[模型呼叫盤點](model-calls.md)。模型環境變數須放在實際啟動環境，只設在無關的 SSH shell 不會生效。
 
 排程是另一個明確啟用的選用步驟：
 
