@@ -15,12 +15,12 @@ sequenceDiagram
     State->>Model: 預留一次有界決定
     Human->>State: 新訊息或暫停
     State->>State: 推進 epoch 或暫停
-    Model-->>State: 結構化 speak 或 wait
+    Model-->>State: 結構化 speak、pass 或 close
     State->>State: 重查 epoch、授權、額度與暫停
-    alt 仍有授權
+    alt 仍有授權且決定需要送出內容
         State->>Discord: 送出已持久化的 outbox
         Discord-->>State: 確認訊息 ID
-    else 過期或結果不明
+    else 靜默、過期或結果不明
         State->>State: 丟棄或保留待查，不盲目重送
     end
 ```

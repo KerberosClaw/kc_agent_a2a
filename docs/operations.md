@@ -56,3 +56,28 @@ Discord 頻道存取與應用程式 registry 都必須更新。先停止本套 P
 ## 生活資料與監控
 
 [共享脈絡](context.md)說明回填、等待檔案穩定、失敗退避、來源撤回與停用。若已啟用[watchdog](watchdog.md)，規劃維護前暫停同一套安裝的 LaunchAgent，避免把預期停止當故障；直接 checkout 安裝與版本化安裝的路徑都須保留。升級時不重新初始化帳本，也不刪除未知送達紀錄。
+
+## 模型變更後沒有回覆
+
+按下列順序找出第一個失敗邊界。這是診斷順序，不能從「沒有回話」直接推定是哪個原因：
+
+| 檢查層 | 要取得的證據 | 仍不能推出的結論 |
+| --- | --- | --- |
+| 程序與來源 | 正確的 worker、來源 revision、interpreter 與核准指標 | 模型可執行 |
+| Discord READY | 本次啟動已通過連線、身分、權限與歷史檢查 | 原生 CLI 已登入 |
+| CLI 探索 | **實際啟動環境**的 PATH 能找到預期 executable | 互動式終端能找到就代表背景程序也能找到 |
+| 登入與執行環境 | 同一啟動路徑可取得登入狀態並完成原生呼叫 | SSH shell 與 GUI 使用者工作階段的 Keychain 行為相同 |
+| 原生決定 | 本次 request 的完整事件、合法結構化結果及允許的工具軌跡 | `pass` 或有效結果代表訊息已送達 |
+| 真人回合送達 | 已註冊真人的新訊息觸發預期行為；需要發言時取得 Discord 訊息 ID | 只有 READY 或合成傳輸就等於真人驗收 |
+
+只有工作目錄／輸入檔而沒有完成事件，能縮小到啟動或執行階段，**不能單憑這點判定 Keychain 故障**。先看去敏後的 exit status 與錯誤類別；不要把登入重設、清 Keychain 或刪資料庫列成通用修法。需要 GUI 登入脈絡的 macOS 安裝，應透過原本的 GUI 使用者 LaunchAgent 啟動並驗證，而非只在 SSH shell 重啟後看程序存活。
+
+維護時先暫停本套[watchdog](watchdog.md)，保留 registry、額度、outbox、審查版本與 continuity 帳本。確認[模型設定來源](model-calls.md)、原生決定和真人回覆後再恢復監控。診斷輸出留在受保護的 runtime；公開問題只附版本、錯誤類別及虛構重現。
+
+## 結構化摘要失敗的復原邊界
+
+[結果解析器](../src/discord_party/continuity.py)只對明確格式差異提供窄範圍相容：內層 JSON 字串可含換行，以及結尾可有 `</content>`、其後選用的 `</invoke>`。它仍拒絕 NUL 等不允許的控制字元、任意尾文或多個 JSON 物件。[來源行號驗證](../src/discord_party/shared_context.py)會把排序且不重複的整數行號清單轉成包覆區間，再檢查上下界；這不取代獨立審查對原文的核對。
+
+格式可解析仍須通過內容契約：摘要 `overview` 上限 700 字元，`observations` 最多 12 項，來源引用必須有效。不要截掉超長內容、放寬引用或吞掉錯誤來讓狀態變綠。失敗工作保留凍結輸入與退避狀態；先修正對應契約，再由既有 worker 重試。總摘要失敗時原始分段仍可讀，不需清帳本或重新聊天。不同工作有自己的退避規則，沒有可通用套用的手改 SQLite 解鎖步驟。
+
+回歸入口：[解析與失敗退避](../tests/discord_party/test_continuity.py)、[來源行號及 serializer 相容](../tests/discord_party/test_shared_context.py)。

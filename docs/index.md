@@ -12,6 +12,7 @@
 | 如何安裝隔離的預覽環境 | [安裝](installation.md) |
 | 如何操作、停止、診斷及復原 | [維運](operations.md)與[選用故障通知](watchdog.md) |
 | 如何按需查生活資料、自己的相處史與夜聊 | [共享脈絡](context.md) |
+| 哪些地方呼叫模型、model／effort 從哪裡來 | [模型呼叫盤點](model-calls.md) |
 | SQLite 結構與產物由誰管理 | [資料模型](data-model.md)與[schema 附錄](schema.md) |
 | 如何整合 client 或 hook | [介面契約](interfaces.md) |
 | 如何接上原始人格／poke 專案 | [整合](integration.md) |
