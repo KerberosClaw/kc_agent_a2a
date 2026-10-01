@@ -48,6 +48,10 @@ continuity.py --config CONFIG save-abort --save-id SAVE
 
 `save-begin` 凍結批次引用與正式人格 Git base。人格自行評估這些經歷並寫出有理由的檔案，helper 不會自動編輯人格。`save-commit` 只接受支援的 patch／journal 路徑，檢查 staged 內容、base／lock 與加密後，記錄不含私人細節的 commit 及備份狀態。Resume 透過 manifest 對帳先前的 commit；abort 保留檔案，批次維持待評估。撰寫整合前先讀 [continuity_save.py](../src/discord_party/continuity_save.py)。
 
+Helper 拒絕時 stderr 輸出 `CONTINUITY_NOT_READY NotReady: <原因>` 並 exit 1。原因都是程式內固定的提示字串（例如 patch 超過 20 行），人格可照著修正後用同一個 save ID 重跑。其他例外只印類別名稱，避免指令輸出或檔案內容進入背景日誌。
+
+Helper 本身不能用時（指令不存在、錯誤不是 `NotReady`），人格的存檔協議應保留手動備案：能 abort 就先 `save-abort`，再只把 journal 與新 patch 手動 commit／push，並自行檢查 patch 行數、既有 patch 未改動與加密狀態。批次維持待評估，下次正式存檔再帶出；沒能 abort 的那筆，helper 恢復後要先 abort 才能 `save-begin`。
+
 ## 生活查詢狀態
 
 | `status` | 可對使用者表達的意義 |

@@ -74,6 +74,8 @@ if __name__ == '__main__':
     try:
         main()
     except Exception as error:
-        # Do not put private exception arguments in daemon logs.
-        print('CONTINUITY_NOT_READY ' + type(error).__name__, file=sys.stderr)
+        # Do not put private exception arguments in daemon logs. NotReady reasons
+        # are fixed operator guidance, so a persona can see what to correct.
+        reason = error.args[0] if isinstance(error, NotReady) and len(error.args) == 1 and isinstance(error.args[0], str) else ''
+        print('CONTINUITY_NOT_READY ' + type(error).__name__ + (': ' + reason if reason else ''), file=sys.stderr)
         sys.exit(1)
