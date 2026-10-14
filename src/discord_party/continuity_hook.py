@@ -6,7 +6,7 @@ from pathlib import Path
 import uuid
 
 from a2a.digest_hook import registered_native
-from a2a.note_native import history
+from a2a.native_history import history
 from a2a.storage import BoundaryError
 from .continuity import Continuity, encode
 

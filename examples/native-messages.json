@@ -1,0 +1,12 @@
+{
+  "receipts": "/absolute/private/runtime/native-receipts",
+  "codex_home": "/absolute/home/.codex",
+  "claude_home": "/absolute/home/.claude",
+  "codex": "/absolute/path/to/codex",
+  "senders": ["alice", "bob", "relay"],
+  "claude_wire_versions": ["2.1.280"],
+  "targets": {
+    "alice": {"engine": "claude", "cwd": "/absolute/personas/alice"},
+    "bob": {"engine": "codex", "cwd": "/absolute/personas/bob", "session": "11111111-1111-4111-8111-111111111111", "source": "vscode"}
+  }
+}

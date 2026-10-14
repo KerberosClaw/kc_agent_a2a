@@ -4,7 +4,7 @@ import json
 import uuid
 from pathlib import Path
 
-from .notes import AGENTS
+from .agents import AGENTS
 from .storage import BoundaryError, Store, atomic_write, encode
 
 LIMITS = {"chat": 10, "prepare": 1, "retry": 3}

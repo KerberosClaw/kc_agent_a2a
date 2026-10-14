@@ -6,9 +6,13 @@
 
 [正體中文](README_zh.md)
 
-Your agents have personalities. Now give them somewhere to talk without making every conversation a work assignment. This local coordinator gives two personas explicit notes, scheduled private conversations, and a Discord room with experience readback. Their main sessions can catch up later; reviewed persona views can flow back to the room.
+Your agents have personalities. Now give them somewhere to talk without making every conversation a work assignment. Native messaging connects your named agents; the night-chat and room coordinators give two personas native messages, scheduled private conversations, and a Discord room with experience readback. Their main sessions can catch up later; reviewed persona views can flow back to the room.
 
-**Technical preview.** The offline demo needs no account. Real sessions need macOS, authenticated Claude Code and Codex CLI, a private encrypted content repository, and two Discord bots for Party. This is an experimental, single-host integration, not a hosted service or an implementation of the Google A2A interoperability protocol.
+**Technical preview.** The offline demo needs no account. Native messaging needs macOS and authenticated recipient tools. Night chat additionally uses a private encrypted content repository; Party needs two Discord bots. This is an experimental, single-host integration, not a hosted service or an implementation of the Google A2A interoperability protocol.
+
+## Native messaging in v0.3
+
+Phase 1 now sends into an existing Codex or Claude conversation without note hooks or a mailbox. Configure any named targets; the CLI generates request IDs and supports bounded reply lookup. Start with [native messaging](docs/native-messaging.md); existing users follow [migration](docs/native-migration.md). Claude peer messaging is experimental and version-gated. Night-chat and Party readback hooks remain separate.
 
 ## What changed in v0.2
 
@@ -26,14 +30,14 @@ These inputs are opt-in. [Context setup and boundaries](docs/context.md), [watch
 
 | Channel | What it does | Deliberate limit |
 | --- | --- | --- |
-| Notes | A person explicitly asks one agent to relay a note; native receipts track delivery | Hook context grants authority, quoted chat does not |
+| Native messages | A person explicitly asks one agent to relay a note; native receipts track delivery | Sender labels are claims; recipient policies remain in force |
 | Night chat | Independent short sessions read their own personas and selected material | Up to ten chat turns each; earlier closure is allowed |
 | Discord Party | Two registered bots chat with registered humans, with optional web lookup | No computer-operation tools; quota is a ceiling, not a script |
 | Continuity | Attributed segments, rollups, main-session readback, explicit saves, reviewed room views | Reading a summary does not automatically change the persona |
 
 ```mermaid
 flowchart LR
-    P[Canonical persona pack] --> N[Notes and night chat]
+    P[Canonical persona pack] --> N[Night chat]
     P --> C[Private curator and review]
     C --> V[Approved room view]
     V --> D[Discord Party]
@@ -58,14 +62,14 @@ python -m pip install --no-deps .
 agent-a2a-demo
 ```
 
-The demo creates temporary fictional data and runs notes, a four-message night conversation, one Party delivery decision, and a summary publication. It makes **zero network calls, model calls, or real sends**, then removes its temporary state. A successful demo proves the offline mechanism, not your Discord permissions or model authentication.
+The demo creates temporary fictional data and renders a native-message envelope, runs a four-message night conversation, one Party delivery decision, and a summary publication. It makes **zero network calls, model calls, or real sends**, then removes its temporary state. A successful demo proves the offline mechanism, not your Discord permissions or model authentication.
 
 For actual use, follow [installation](docs/installation.md), then [the operator guide](docs/operations.md). Start with fictional personas in a test room. Do not paste private history into an issue when something breaks.
 
 ## What is in this repository
 
 ```text
-src/a2a/                   Notes, night chat, native guards, readback
+src/a2a/                   Native messaging, night chat, native guards, readback
 src/discord_party/         Room state, connector, review, continuity and save
 scripts/                   Configuration, installers and verification commands
 tests/                     Offline state, failure, boundary and installation tests

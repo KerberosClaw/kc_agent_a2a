@@ -59,7 +59,7 @@ def begin(state, root, agent, *, claim_id=None, config=None):
         active_claim = None
         if claim_id:
             from .continuity_hook import roots
-            from a2a.note_native import history
+            from a2a.native_history import history
             active_claim = state.db.execute("SELECT c.*,n.engine,n.transcript FROM claims c JOIN native_claims n ON n.claim=c.id WHERE c.id=? AND c.agent=? AND c.state='pending'", (claim_id, agent)).fetchone()
             if not active_claim or not config:
                 raise NotReady('Unknown current-turn experience claim')

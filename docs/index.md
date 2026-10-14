@@ -9,6 +9,7 @@
 | 想了解的事 | 閱讀文件 |
 | --- | --- |
 | 元件如何組成系統 | [架構](architecture.md)與[流程](flows.md) |
+| 如何傳訊與移轉舊紙條 | [原生傳訊](native-messaging.md)、[移轉](native-migration.md) |
 | 如何安裝隔離的預覽環境 | [安裝](installation.md) |
 | 如何操作、停止、診斷及復原 | [維運](operations.md)與[選用故障通知](watchdog.md) |
 | 如何按需查生活資料、自己的相處史與夜聊 | [共享脈絡](context.md) |

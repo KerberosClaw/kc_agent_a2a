@@ -9,7 +9,7 @@ import time
 import uuid
 from pathlib import Path
 
-from .notes import AGENTS
+from .agents import AGENTS
 from .storage import BoundaryError, atomic_write, encode
 
 

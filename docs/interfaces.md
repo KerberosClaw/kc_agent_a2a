@@ -11,7 +11,7 @@
 | `agent-a2a-demo` | 無 | 合成 JSON 指標，不呼叫外部服務 |
 | `setup_preview.py` | 明確根目錄；設定房間時提供房間與參與者 ID | 本機設定與待審查內容；核准使用另一個子指令 |
 | 受防護的 `agent-a2a` | `preflight`、`start`、`status`、`tick`、`enable`、`disable`、`stop` | 本機執行狀態；start／tick 可能呼叫真實模型 |
-| `agent-note` | 當前原生 hook token、操作與有大小限制的 JSON 本文 | 紙條 ID、受限的 receive／ack 指示，或去敏錯誤 |
+| `agent-message` | 明確設定、send／inspect／list／check、JSON 本文 | 原生收據與回覆；來源標記是聲明，不是操作授權，見[完整契約](native-messaging.md) |
 | `party.py` | Registry JSON、獨立狀態目錄、受限 token 檔與核准授權 | 本機狀態或真實 Discord client |
 | `manage.py` | `start`、`stop`、`status` 與明確 runtime | 所管理的程序紀錄；start 不等於 READY |
 | `continuity.py` | 設定、`tick`、`status`、`save-*` 操作 | 摘要工作、帳本狀態與明確存檔生命週期 |
@@ -33,7 +33,7 @@ Party 依 adapter 的結構化輸出 schema 回傳 `request_id`、`action`（`sp
 
 `speak` 要有非空內容；`pass` 必須空內容，維持 listening；`close` 可無內容直接結束自己的本輪參與，也可帶收尾文字，確認送達後再標記 closed。它不是停止整個服務或關閉另一隻 bot；新的合格真人訊息可恢復 listening，暫停、授權與額度檢查仍然適用。狀態處理見 [state.py](../src/discord_party/state.py)。
 
-Hook 要求預期的 session、根目錄、事件、輸入 ID 與原生逐字稿；排除 subagent 事件及根目錄不符的輸入。紙條寄送授權只涵蓋當前真人回合。`receive` 和 `ack` 登記候選處理，對帳會核對真實原生回合，才建立最終回執並移除本文。Party 經歷摘要即使由 hook 印出，也不能直接算已讀，還需要原生逐字稿對帳。較早的夜聊 digest hook 則從成功的 Stop 事件與 assistant 回覆記錄完成，沒有使用同一套逐字稿回執帳本。
+Hook 要求預期的 session、根目錄、事件、輸入 ID 與原生逐字稿；排除 subagent 事件及根目錄不符的輸入。原生傳訊不使用 hook 票券；呼叫端自行判斷主人明確意圖，平台政策仍適用。Party 經歷摘要即使由 hook 印出，也不能直接算已讀，還需要原生逐字稿對帳。較早的夜聊 digest hook 則從成功的 Stop 事件與 assistant 回覆記錄完成，沒有使用同一套逐字稿回執帳本。
 
 ## 正式人格存檔生命週期
 

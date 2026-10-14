@@ -3,12 +3,13 @@ import json
 from pathlib import Path
 import tempfile
 from .dry_run import walkthrough
+from .native_message import envelope
 from discord_party.state import Registry, State, Event
 from discord_party.continuity import Continuity
 
 
 def run(root):
-    first = walkthrough(root/'notes-night')
+    first = walkthrough(root/'night')
     registry = Registry('1', '2', ('10',), {'20': '10', '30': '10'}, '20')
     state = State(root/'party', registry, initialize=True)
     continuity = Continuity(root/'continuity')
@@ -27,7 +28,7 @@ def run(root):
         assert continuity.publish(job, {'overview':'A synthetic conversation.', 'observations':[
             {'kind':'said','text':'Author 10 mentioned a rainy walk.','refs':[str(job['refs'][0])]}]})
         return {'synthetic':True,'network_calls':0,'model_calls':0,'messages_sent':0,
-                'note_status':first['note_after'], 'night_messages':len(first['whisper']['messages']),
+                'message_envelope': envelope('fictional-id','agent_a','Fictional greeting.'), 'night_messages':len(first['whisper']['messages']),
                 'party_quota_remaining':state.snapshot()['remaining'],
                 'summary_batches':continuity.db.execute("SELECT count(*) FROM batches WHERE status='ready'").fetchone()[0]}
     finally:state.close();continuity.close()

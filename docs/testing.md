@@ -15,7 +15,7 @@ Runner 會探索各個獨立測試根目錄，回報數量、失敗及略過項�
 
 | 契約 | 證據 |
 | --- | --- |
-| 紙條授權、回執、本文移除 | A2A 核心與紙條 runtime 測試 |
+| 原生去重、未知結果、來源界線、移轉復原 | native message／migration／public setup 測試 |
 | 每日時間窗口、停止、額度、備份失敗 | Nightly、trial、backup 測試 |
 | 重啟去重、未知送達、過期決定 | Party state／runtime／connector 測試 |
 | 授權、成員、歷史限制、token 儲存 | Native gate、membership、pilot、installation 測試 |

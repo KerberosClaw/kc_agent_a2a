@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 
 from .codex_adapter import CodexAdapter
 from .coordinator import Coordinator, LIMITS
-from .notes import AGENTS
+from .agents import AGENTS
 from .persona import snapshot
 from .social import save_snapshot, verify_repository
 from .storage import BoundaryError, NativeRefusal, Store, atomic_write, encode

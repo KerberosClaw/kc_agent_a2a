@@ -4,6 +4,10 @@
 
 [文件索引](docs/index.md)
 
+## v0.3.0-alpha.1
+
+Phase 1 改為原生傳訊：既有 Codex queue 與實驗 Claude peer adapter、通用對象設定、自動 request ID、去重／回覆查詢及明確舊紙條移轉。拆出夜聊角色常數與 continuity 原生歷史 reader，保留夜聊／Party 行為。原生傳訊不安裝 hook；即時脈絡交接不在此次範圍。
+
 ## 未發布
 
 - Continuity helper 拒絕存檔時附上固定原因字串，人格能自行修正；其他例外仍只印類別名稱。

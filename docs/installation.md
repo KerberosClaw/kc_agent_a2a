@@ -60,16 +60,17 @@ python scripts/install_a2a_nightly.py --runtime "$HOME/agent-a2a-preview/runtime
 
 `nightly_hours` 預設為 Asia/Taipei 的 `[3,6]`，本預覽版未提供時區選擇器。沒有話題或話題已聊完時可以提前結束，十句額度代表上限。
 
-## 紙條與摘要讀回
+## 原生傳訊與摘要讀回
 
-這些安裝器會修改使用者層的 Claude／Codex hook 設定，並在本預覽環境的 runtime 保存備份。若現有原生 session 很重要，請用另一個作業系統帳號測試。安裝器不會重啟既有 session，也不會略過 Codex hook 信任審查。
+Phase 1 可獨立安裝，不需要夜聊／Discord／內容 Git；按照[原生傳訊安裝與操作](native-messaging.md)設定既有對話。新版不安裝寄收 hook。舊紙條使用者先讀[移轉指引](native-migration.md)。
+
+夜聊與 Party 的摘要讀回仍是獨立的選用功能，其 hook 保留：
 
 ```bash
-python scripts/install_a2a_notes.py --runtime "$HOME/agent-a2a-preview/runtime"
 python scripts/install_a2a_readback.py --runtime "$HOME/agent-a2a-preview/runtime"
 ```
 
-在各自註冊的根目錄開啟人格、審查原生 hook 權限，再於該 session 驗證真實輸入與回執。`sessions` 可明確綁定已知原生 session；否則須由原生 metadata 驗證根目錄／角色映射。範圍不符就不讀回。Hook 安裝成功不等於已取得回執，詳見 [介面契約](interfaces.md)。
+這個安裝器會修改使用者層的 Claude／Codex hook 設定；它不屬於原生傳訊安裝。使用隔離帳號、審查權限並驗證原生讀回回執。安裝不會重啟既有人格。
 
 ## 設定 Party
 

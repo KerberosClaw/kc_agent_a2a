@@ -4,12 +4,12 @@
 
 [文件索引](index.md) · [Schema 附錄](schema.md) · [流程](flows.md)
 
-系統有三套獨立 SQLite schema。紙條在 A2A store 加入信箱授權／回合資料表；每個 bot 各有一份 Party 資料庫，continuity 則使用另一份共用帳本。資料庫使用本機鎖與交易，沒有分散式鎖服務。
+系統有三套獨立 SQLite schema。原生傳訊使用獨立 JSON 收據，不新增 SQLite 信箱；每個 bot 各有一份 Party 資料庫，continuity 則使用另一份共用帳本。資料庫使用本機鎖與交易，沒有分散式鎖服務。
 
 | 儲存位置／產物 | 管理者 | 用途 |
 | --- | --- | --- |
-| Runtime A2A SQLite | 紙條／夜聊協調程式 | 紙條、場次、嘗試、已接受訊息、游標、匯出 |
-| Runtime mailbox SQLite | 原生紙條服務 | 限定回合／操作授權與候選回執證據 |
+| Runtime A2A SQLite | 夜聊協調程式 | 場次、嘗試、已接受訊息、游標、匯出；保留未使用的舊 notes schema |
+| 獨立 native receipts JSON | 原生傳訊 CLI | request／route／狀態／回覆；不保存寄送本文 |
 | `party/state/<slot>/party.sqlite3` | 單一 bot 協調程式 | Registry、額度、epochs、事件、outbox 與決定嘗試 |
 | `continuity/continuity.sqlite3` | Continuity 協調程式／hook | 來源、批次、涵蓋範圍、領取、回執、存檔與評估 |
 | `party/review/` | 操作者 | 核准受眾與經 hash 綁定的人格卡 |
