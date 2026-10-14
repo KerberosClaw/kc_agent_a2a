@@ -21,7 +21,7 @@
 | 生活與自己的 journal 整理 | 每篇合格來源先整理一次；空候選即結束，有候選再審查一次；共同日記只做一份，各自 journal 分開 | [shared context](../src/discord_party/shared_context.py) |
 | 夜聊共同 recap | 以既有署名 digest 組合文字、引用與指紋，**這一步不呼叫 LLM**；digest 原先由夜聊回合產生 | [night recap](../src/a2a/night_recap.py) |
 
-以上數量不含後續失敗重試，也不包括外部人格主對話／Poke 自己的模型工作。紙條投遞、hook 讀回、檔案封存和指紋計算本身不另啟模型；它們接到的原生人格回合仍由各平台計量。回歸入口：[夜聊測試](../tests/a2a)、[sharing](../tests/discord_party/test_sharing.py)、[shared context](../tests/discord_party/test_shared_context.py)。
+以上數量不含後續失敗重試，也不包括外部人格主對話／Poke 自己的模型工作。原生訊息傳送、hook 讀回、檔案封存和指紋計算本身不另啟模型；它們接到的原生人格回合仍由各平台計量。回歸入口：[夜聊測試](../tests/a2a)、[sharing](../tests/discord_party/test_sharing.py)、[shared context](../tests/discord_party/test_shared_context.py)。
 
 ## Model 與 effort 從哪裡來
 

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kc-agent-a2a"
-version = "0.2.0a1"
-description = "Bounded agent notes, nightly conversations, Discord Party and continuity"
+version = "0.3.0a1"
+description = "Native agent messaging, nightly conversations, Discord Party and continuity"
 requires-python = ">=3.12"
 license = "MIT"
 authors = [{name = "KerberosClaw"}]
@@ -17,4 +17,5 @@ where = ["src"]
 include = ["a2a*", "discord_party*"]
 
 [project.scripts]
+agent-message = "a2a.native_message:main"
 agent-a2a-demo = "a2a.demo:main"

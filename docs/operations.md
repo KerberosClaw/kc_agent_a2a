@@ -2,7 +2,7 @@
 
 > **English summary:** Check process state, READY, delivery IDs, readback receipts, canonical assessment, and remote backup separately. Stop only the owned workers, preserve ledgers during upgrades, and reconcile uncertain outcomes instead of resetting state.
 
-[文件索引](index.md) · [安裝](installation.md) · [資料模型](data-model.md)
+[原生傳訊操作](native-messaging.md) · [舊紙條移轉](native-migration.md) · [文件索引](index.md) · [安裝](installation.md) · [資料模型](data-model.md)
 
 ## 要看哪些訊號
 
@@ -31,17 +31,17 @@ python scripts/discord_party/manage.py stop --runtime "$HOME/agent-a2a-preview/p
 停用排程會阻止未來的夜聊；`stop` 則請求取消正在執行的一場。兩者都不會重啟主人格 session。若移除排程，只移除此安裝所屬的 LaunchAgent。紙條接線可移除，同時保留信箱與回執：
 
 ```bash
-python scripts/uninstall_a2a_notes.py
+python scripts/migrate_native_messages.py --runtime RUNTIME --archive RUNTIME/retired-notes/CHOSEN_NAME
 ```
 
-若安裝時使用自訂紙條 helper，移除時傳入相同的 `--helper`。本預覽版的讀回接線須手動移除：只刪除 Codex 設定中產生的 relationship-readback 區塊，以及 Claude 設定中相符的 digest-hook 指令。還原前先檢查備份；直接用整份舊設定覆蓋，可能抹掉後來的無關變更。
+移轉工具從舊 note-config 取得確切 helper，不猜另一個安裝。本預覽版的讀回接線須手動移除：只刪除 Codex 設定中產生的 relationship-readback 區塊，以及 Claude 設定中相符的 digest-hook 指令。還原前先檢查備份；直接用整份舊設定覆蓋，可能抹掉後來的無關變更。
 
 ## 升級、退回與備份
 
 1. 換程式前，只停止本套 Party 並停用其排程 worker。驗證完成前保留目前的來源與 venv。
 2. 記錄舊 revision 與核准審查指標。使用 SQLite backup API 備份資料庫，包含 continuity 狀態；只複製使用中的 `.sqlite3` 可能漏掉 WAL 資料。
 3. 保留 bot 狀態、registry、額度、outbox、歷史、回執、尚未完成的存檔交易及核准視圖。不可拿 `init` 當升級，也不可刪帳本來消除錯誤。
-4. 驗證候選版的離線測試與隔離設定。只更新紙條 helper 的方式（`install_a2a_notes.py --update-helper-only --runtime ...`）會保留已安裝設定的原始位元組。
+4. 驗證候選版的離線測試與隔離設定。原生傳訊按[安裝指引](native-messaging.md)更新 helper；舊紙條按[移轉指引](native-migration.md)先預覽再套用，保留原始資料。
 5. 已有版本化安裝時，continuity 升級 helper 會複製已提交版本、檢查兩份視圖、備份資料庫／hook，再更新自己管理的指標。用 `--help` 查看參數，前置條件見 [安裝](installation.md)。
 6. 核對 READY、回執行為、保留的計數及遠端備份 hash。失敗時只停候選版 worker，還原舊來源／審查／helper 指標，再對帳狀態。已有新訊息送達後，不可還原成送出前的舊帳本，否則可能重複發送。
 

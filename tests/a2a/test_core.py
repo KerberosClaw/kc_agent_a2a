@@ -10,7 +10,6 @@ from unittest.mock import patch
 
 from a2a.adapters import SyntheticAdapter
 from a2a.coordinator import Coordinator, LIMITS
-from a2a.notes import Mailbox
 from a2a.persona import snapshot
 from a2a.storage import BoundaryError, Store
 
@@ -22,23 +21,13 @@ class CoreCase(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         self.store = Store(self.root / 'state')
-        self.mail = Mailbox(self.store)
         self.coord = Coordinator(self.store)
 
     def tearDown(self):
         self.store.close()
         self.tmp.cleanup()
 
-    def send(self, **kw):
-        args = dict(courier='agent_a', recipient='agent_b', source_session='sender', source_input='input', body='test note')
-        return self.mail.send(**(args | kw))
 
-    def delivered(self):
-        note = self.send()
-        claim = self.mail.claim('agent_b', 'receiver', 'turn')[0]
-        self.mail.injected(note, claim['claim_id'])
-        return dict(note_id=note, claim_id=claim['claim_id'], session='receiver', turn='turn',
-                    status='success', ack_ids=[note], assistant_final='received')
 
     def run_id(self):
         return self.coord.start('window', DAY)
@@ -55,97 +44,15 @@ class CoreCase(unittest.TestCase):
             self.coord.accept(attempt)
         return attempt
 
-    def test_note_dedup_and_validation(self):
-        note = self.send()
-        self.assertEqual(note, self.send(body='duplicate delivery'))
-        self.assertEqual(self.store.db.execute('SELECT count(*) FROM notes').fetchone()[0], 1)
-        for kwargs in ({'recipient': '../bad'}, {'recipient': 'agent_a'}, {'body': ' '}, {'body': 'a'*4001}, {'source_input': ''}):
-            with self.subTest(kwargs=list(kwargs)), self.assertRaises(BoundaryError):
-                self.send(**kwargs)
 
-    def test_receipt_must_match_native_turn_and_ack(self):
-        receipt = self.delivered()
-        for kwargs in ({'turn': 'other'}, {'session': 'other'}, {'claim_id': 'other'}, {'status': 'failed'}, {'ack_ids': []}, {'assistant_final': ''}):
-            with self.subTest(kwargs=kwargs):
-                self.assertFalse(self.mail.reconcile(**(receipt | kwargs)))
-                self.assertEqual(self.mail.status(receipt['note_id']), 'delivered')
-        self.assertTrue(self.mail.reconcile(**receipt))
-        self.assertEqual(self.mail.status(receipt['note_id']), 'burned')
-        self.assertFalse(list((self.store.root/'mail').rglob('*.json')))
 
-    def test_confirmed_failure_retry_preserves_id(self):
-        receipt = self.delivered()
-        with self.assertRaises(BoundaryError):
-            self.mail.retry_failed(receipt['note_id'], receipt['claim_id'], native_status='unknown')
-        self.mail.retry_failed(receipt['note_id'], receipt['claim_id'], native_status='failed')
-        claim = self.mail.claim('agent_b', 'receiver', 'next')[0]
-        self.assertEqual(claim['id'], receipt['note_id'])
-        self.assertNotEqual(claim['claim_id'], receipt['claim_id'])
 
-    def test_cancel_before_injection_only(self):
-        note = self.send()
-        self.assertTrue(self.mail.cancel(note))
-        self.assertEqual(self.mail.status(note), 'cancelled')
-        self.assertFalse(list((self.store.root/'mail').rglob('*.json')))
-        receipt = self.delivered_other()
-        self.assertFalse(self.mail.cancel(receipt))
 
-    def delivered_other(self):
-        note = self.send(source_input='second')
-        claim = self.mail.claim('agent_b', 'r', 't')[0]
-        self.mail.injected(note, claim['claim_id'])
-        return note
 
-    def test_cancel_survives_unlink_failure(self):
-        note = self.send()
-        with patch.object(Path, 'unlink', side_effect=OSError('injected failure')):
-            with self.assertRaises(OSError): self.mail.cancel(note)
-        self.assertEqual(self.mail.status(note), 'cancelled')
-        self.assertEqual(self.mail.claim('agent_b', 'new', 'new'), [])
-        self.mail.cleanup(note)
-        self.assertFalse(list((self.store.root/'mail').rglob('*.json')))
-        self.assertEqual(self.mail.status(note), 'cancelled')
 
-    def test_ack_survives_unlink_failure(self):
-        receipt = self.delivered()
-        with patch.object(Path, 'unlink', side_effect=OSError('injected failure')):
-            with self.assertRaises(OSError):
-                self.mail.reconcile(**receipt)
-        self.assertEqual(self.mail.status(receipt['note_id']), 'acknowledged')
-        self.assertEqual(self.mail.claim('agent_b', 'new', 'new'), [])
-        self.mail.cleanup(receipt['note_id'])
-        self.assertEqual(self.mail.status(receipt['note_id']), 'burned')
 
-    def test_claim_batch_character_and_count_limits(self):
-        for i in range(7):
-            self.send(source_input=str(i), body='x'*4000)
-        self.assertEqual(len(self.mail.claim('agent_b', 'r', 't')), 3)
-        for i in range(7):
-            self.mail.send(courier='agent_b', recipient='agent_a', source_session='s', source_input=str(i), body='x')
-        self.assertEqual(len(self.mail.claim('agent_a', 'r', 't')), 5)
 
-    def test_crash_after_rename_reclaims_without_duplicate(self):
-        note = self.send()
-        row = self.store.db.execute('SELECT * FROM notes WHERE id=?', (note,)).fetchone()
-        claimed = self.mail.path(row, 'claimed')
-        claimed.parent.mkdir(parents=True)
-        code = "from pathlib import Path; import os,sys; from a2a.storage import Store; s=Store(Path(sys.argv[1])); s.db.execute('BEGIN IMMEDIATE'); Path(sys.argv[2]).replace(Path(sys.argv[3])); os._exit(23)"
-        p = subprocess.run([sys.executable, '-c', code, str(self.store.root), str(self.mail.path(row, 'new')), str(claimed)])
-        self.assertEqual(p.returncode, 23)
-        claims = self.mail.claim('agent_b', 'r', 't')
-        self.assertEqual([c['id'] for c in claims], [note])
-        self.assertEqual(self.mail.claim('agent_b', 'r2', 't2'), [])
 
-    def test_parallel_claims_do_not_duplicate(self):
-        self.send()
-        code = "from pathlib import Path; import sys,json; from a2a.storage import Store; from a2a.notes import Mailbox; s=Store(Path(sys.argv[1])); print(json.dumps(Mailbox(s).claim('agent_b',sys.argv[2],'t')))"
-        workers = [subprocess.Popen([sys.executable, '-c', code, str(self.store.root), str(i)], stdout=subprocess.PIPE, text=True) for i in range(2)]
-        claims = []
-        for p in workers:
-            out, _ = p.communicate(timeout=10)
-            self.assertEqual(p.returncode, 0)
-            claims.extend(json.loads(out))
-        self.assertEqual(len(claims), 1)
 
     def test_budget_10_chat_plus_preparation(self):
         run = self.run_id()

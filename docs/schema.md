@@ -86,7 +86,7 @@ CREATE TABLE messages(
           UNIQUE(run, ordinal));
 ```
 
-### notes
+### notes（保留的舊表，現行原生傳訊不使用）
 
 ```sql
 CREATE TABLE notes(
